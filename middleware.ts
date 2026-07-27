@@ -14,5 +14,10 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   // Everything requires a client session except the login page + statics
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico).*)"],
+  // — including anything served straight out of /public (e.g.
+  // awaj-mark.svg on the login screen itself, requested before a
+  // session cookie exists).
+  matcher: [
+    "/((?!login|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpe?g|gif|webp|ico)$).*)",
+  ],
 };

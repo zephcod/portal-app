@@ -34,10 +34,10 @@ export function MiniLineChart({
   if (points.length === 0) {
     return (
       <div>
-        <span className="font-mono text-[11px] tracking-[0.1em] text-warmgray uppercase">
+        <span className="font-mono text-[11px] tracking-[0.1em] text-muted uppercase">
           {title}
         </span>
-        <div className="mt-1 flex h-32 items-center justify-center text-xs text-warmgray">
+        <div className="mt-1 flex h-32 items-center justify-center text-xs text-muted">
           No data for this period yet.
         </div>
       </div>
@@ -63,10 +63,10 @@ export function MiniLineChart({
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <span className="font-mono text-[11px] tracking-[0.1em] text-warmgray uppercase">
+        <span className="font-mono text-[11px] tracking-[0.1em] text-muted uppercase">
           {title}
         </span>
-        <span className="font-display text-sm font-semibold text-charcoal">
+        <span className="font-display text-sm font-semibold text-fg">
           {total.toLocaleString()}
         </span>
       </div>
@@ -163,7 +163,7 @@ export function MiniLineChart({
           </>
         )}
       </svg>
-      <div className="mt-1 text-right font-mono text-[10px] text-warmgray">
+      <div className="mt-1 text-right font-mono text-[10px] text-muted">
         {h ? `${h.date} · ${h.value.toLocaleString()}` : "Hover the chart for daily detail"}
       </div>
     </div>

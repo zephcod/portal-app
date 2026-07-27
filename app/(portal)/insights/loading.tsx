@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function PostRow() {
   return (
-    <li className="rounded-lg border border-line bg-white p-3 shadow-sm">
+    <li className="rounded-lg border border-edge bg-card p-3 shadow-sm">
       <div className="flex items-center gap-3">
         <Skeleton className="h-12 w-12 shrink-0 rounded-md" />
         <div className="min-w-0 flex-1 space-y-2">
@@ -29,7 +29,7 @@ export default function InsightsLoading() {
         {Array.from({ length: 4 }, (_, i) => (
           <div
             key={i}
-            className="rounded-lg border border-line bg-white px-4 py-3 shadow-sm"
+            className="rounded-lg border border-edge bg-card px-4 py-3 shadow-sm"
           >
             <Skeleton className="h-3 w-16" />
             <Skeleton className="mt-2 h-6 w-14" />
@@ -41,7 +41,7 @@ export default function InsightsLoading() {
         {Array.from({ length: 2 }, (_, i) => (
           <div
             key={i}
-            className="rounded-lg border border-line bg-white p-4 shadow-sm"
+            className="rounded-lg border border-edge bg-card p-4 shadow-sm"
           >
             <div className="flex items-baseline justify-between">
               <Skeleton className="h-3 w-32" />

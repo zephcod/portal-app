@@ -1,3 +1,4 @@
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/server-session";
@@ -63,12 +64,13 @@ export default async function CampaignDetailPage({
         <div className="min-w-0">
           <Link
             href="/advertising"
-            className="text-sm text-warmgray hover:text-charcoal"
+            className="flex items-center gap-1 text-sm text-muted hover:text-fg"
           >
-            ← All campaigns
+            <ChevronLeft className="h-3.5 w-3.5" />
+            All campaigns
           </Link>
           <h1 className="mt-1 truncate text-3xl font-bold">{campaign.name}</h1>
-          <p className="mt-1 text-sm text-warmgray">
+          <p className="mt-1 text-sm text-muted">
             {[campaign.objective, campaign.status].filter(Boolean).join(" · ")}
             {campaign.objective || campaign.status ? " · " : ""}
             {since} → {until}
@@ -95,17 +97,17 @@ export default async function CampaignDetailPage({
         <MetricCard label="Total investment" value={money(totalInvestment, cur)} />
       </section>
 
-      <section className="mt-8 rounded-xl border border-line bg-white p-4 shadow-sm sm:p-6">
+      <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
         <h2 className="mb-4 text-lg font-semibold">Daily performance</h2>
         <TrendChart data={trend} currency={cur} />
       </section>
 
-      <section className="mt-8 rounded-xl border border-line bg-white shadow-sm">
+      <section className="mt-8 rounded-xl border border-edge bg-card shadow-sm">
         <h2 className="px-4 pt-5 text-lg font-semibold sm:px-6">Daily breakdown</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-warmgray">
+              <tr className="border-b border-edge text-left text-xs uppercase tracking-wide text-muted">
                 {["Date", "Spend", "Impressions", "Reach", "Clicks", "Leads", "Calls", "CPR"].map(
                   (h) => (
                     <th key={h} className="px-4 py-3 font-medium sm:px-6">
@@ -118,7 +120,7 @@ export default async function CampaignDetailPage({
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-warmgray">
+                  <td colSpan={8} className="px-6 py-8 text-center text-muted">
                     No data for this period yet.
                   </td>
                 </tr>
@@ -126,7 +128,7 @@ export default async function CampaignDetailPage({
               {[...rows]
                 .sort((a, b) => b.date.localeCompare(a.date))
                 .map((r) => (
-                  <tr key={r.$id} className="border-b border-line/60 last:border-0">
+                  <tr key={r.$id} className="border-b border-edge/60 last:border-0">
                     <td className="px-4 py-3 font-mono text-xs sm:px-6">{r.date}</td>
                     <td className="px-4 py-3 sm:px-6">{money(r.spend, cur)}</td>
                     <td className="px-4 py-3 sm:px-6">{num(r.impressions)}</td>
@@ -148,14 +150,14 @@ export default async function CampaignDetailPage({
       </section>
 
       {costs.length > 0 && (
-        <section className="mt-8 rounded-xl border border-line bg-white shadow-sm">
+        <section className="mt-8 rounded-xl border border-edge bg-card shadow-sm">
           <h2 className="px-4 pt-5 text-lg font-semibold sm:px-6">
             Additional charges
           </h2>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-warmgray">
+                <tr className="border-b border-edge text-left text-xs uppercase tracking-wide text-muted">
                   {["Date", "Service", "Amount"].map((h) => (
                     <th key={h} className="px-4 py-3 font-medium sm:px-6">
                       {h}
@@ -165,12 +167,12 @@ export default async function CampaignDetailPage({
               </thead>
               <tbody>
                 {costs.map((cost) => (
-                  <tr key={cost.$id} className="border-b border-line/60 last:border-0">
+                  <tr key={cost.$id} className="border-b border-edge/60 last:border-0">
                     <td className="px-4 py-3 font-mono text-xs sm:px-6">{cost.date}</td>
                     <td className="px-4 py-3 sm:px-6">
                       {COST_CATEGORY_LABELS[cost.category]}
                       {cost.description && (
-                        <span className="text-warmgray"> — {cost.description}</span>
+                        <span className="text-muted"> — {cost.description}</span>
                       )}
                     </td>
                     <td className="px-4 py-3 sm:px-6">{money(cost.amount, cur)}</td>
@@ -181,14 +183,14 @@ export default async function CampaignDetailPage({
           </div>
           {/* Totals bar — outside the horizontal-scroll area so it's always
               fully visible on mobile. */}
-          <div className="rounded-b-xl border-t border-line bg-mist/60 px-4 py-3 sm:px-6">
+          <div className="rounded-b-xl border-t border-edge bg-app/60 px-4 py-3 sm:px-6">
             <dl className="flex flex-col gap-1.5 text-sm sm:flex-row sm:justify-end sm:gap-8">
               <div className="flex items-baseline justify-between gap-4 sm:justify-start">
-                <dt className="text-warmgray">Services</dt>
+                <dt className="text-muted">Services</dt>
                 <dd>{money(costTotal, cur)}</dd>
               </div>
               <div className="flex items-baseline justify-between gap-4 sm:justify-start">
-                <dt className="text-warmgray">Ad spend</dt>
+                <dt className="text-muted">Ad spend</dt>
                 <dd>{money(totals.spend, cur)}</dd>
               </div>
               <div className="flex items-baseline justify-between gap-4 font-semibold sm:justify-start">
@@ -200,7 +202,7 @@ export default async function CampaignDetailPage({
         </section>
       )}
 
-      <footer className="mt-10 text-center text-xs text-warmgray">
+      <footer className="mt-10 text-center text-xs text-muted">
         Prepared by{" "}
         {company.accountManager ? `${company.accountManager} · Awaj ET` : "Awaj ET"}
       </footer>

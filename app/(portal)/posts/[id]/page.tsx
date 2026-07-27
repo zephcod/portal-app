@@ -1,3 +1,4 @@
+import { ArrowUpRight, ChevronLeft, Heart, MessageCircle, Repeat2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { IssueStatusChip } from "@/components/IssueStatusChip";
@@ -14,7 +15,7 @@ import { submitPostComment } from "./actions";
 export const dynamic = "force-dynamic";
 
 const inputCls =
-  "w-full rounded-md border border-charcoal/20 bg-white px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none";
+  "w-full rounded-md border border-charcoal/20 bg-card px-3 py-2 text-sm text-fg focus:border-gold focus:outline-none";
 
 type Source = "fb-scheduled" | "fb-published" | "ig-queue" | "ig-published";
 
@@ -49,7 +50,7 @@ export default async function PostDetailPage({
   let placeholder: string;
   let image: string | undefined;
   let permalink: string | undefined;
-  let permalinkLabel = "View on Facebook ↗";
+  let permalinkLabel = "View on Facebook";
   let badge: string | undefined;
   let engagement:
     | { reactions: number; comments: number; shares?: number }
@@ -111,7 +112,7 @@ export default async function PostDetailPage({
     placeholder = "(image post)";
     image = media.thumbnail_url ?? media.media_url;
     permalink = media.permalink;
-    permalinkLabel = "View on Instagram ↗";
+    permalinkLabel = "View on Instagram";
     engagement = {
       reactions: media.like_count ?? 0,
       comments: media.comments_count ?? 0,
@@ -119,29 +120,30 @@ export default async function PostDetailPage({
   }
 
   const comments = await getPostComments(ctx.session.cid, id);
-  const reviewStatus = comments[0]?.status ?? "in_progress";
+  const reviewStatus = comments[0]?.status ?? "in_review";
 
   return (
     <div className="mx-auto max-w-2xl">
       <Link
         href="/calendar"
-        className="font-mono text-xs text-warmgray hover:text-charcoal"
+        className="flex items-center gap-1 font-mono text-xs text-muted hover:text-fg"
       >
-        ← Back to content hub
+        <ChevronLeft className="h-3.5 w-3.5" />
+        Back to content hub
       </Link>
 
-      <div className="mt-4 rounded-xl border border-line bg-white p-6 shadow-sm">
+      <div className="mt-4 rounded-xl border border-edge bg-card p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-amber">
               <PlatformIcon platform={platform} /> {platformName}
             </span>
-            <span className="rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] tracking-wide text-warmgray uppercase">
+            <span className="rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] tracking-wide text-muted uppercase">
               {statusLabel}
             </span>
             <IssueStatusChip status={reviewStatus} />
             {badge && (
-              <span className="rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] text-warmgray">
+              <span className="rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] text-muted">
                 {badge}
               </span>
             )}
@@ -151,14 +153,15 @@ export default async function PostDetailPage({
               href={permalink}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-[11px] text-amber underline"
+              className="flex items-center gap-1 font-mono text-[11px] text-amber underline"
             >
               {permalinkLabel}
+              <ArrowUpRight className="h-3 w-3" />
             </a>
           )}
         </div>
 
-        <p className="mt-2 font-mono text-xs text-warmgray">
+        <p className="mt-2 font-mono text-xs text-muted">
           {fmtDateTime(when)} EAT · {relativeFromNow(when)}
         </p>
 
@@ -167,30 +170,38 @@ export default async function PostDetailPage({
           <img
             src={image}
             alt=""
-            className="mt-4 max-h-96 w-full rounded-lg border border-line bg-mist object-contain"
+            className="mt-4 max-h-96 w-full rounded-lg border border-edge bg-app object-contain"
           />
         )}
 
         <p className="mt-4 text-sm whitespace-pre-wrap">
-          {text || <span className="text-warmgray italic">{placeholder}</span>}
+          {text || <span className="text-muted italic">{placeholder}</span>}
         </p>
 
         {engagement && (
-          <div className="mt-6 flex gap-6 border-t border-line pt-4 font-mono text-xs text-warmgray">
-            <span>♥ {engagement.reactions}</span>
-            <span>💬 {engagement.comments}</span>
-            {engagement.shares !== undefined && <span>↻ {engagement.shares}</span>}
+          <div className="mt-6 flex gap-6 border-t border-edge pt-4 font-mono text-xs text-muted">
+            <span className="flex items-center gap-1">
+              <Heart className="h-3.5 w-3.5" /> {engagement.reactions}
+            </span>
+            <span className="flex items-center gap-1">
+              <MessageCircle className="h-3.5 w-3.5" /> {engagement.comments}
+            </span>
+            {engagement.shares !== undefined && (
+              <span className="flex items-center gap-1">
+                <Repeat2 className="h-3.5 w-3.5" /> {engagement.shares}
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      <section className="mt-8 rounded-xl border border-line bg-white p-4 shadow-sm sm:p-6">
+      <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
         <h2 className="mb-4 text-lg font-semibold">Leave a comment</h2>
         <form action={submitPostComment} className="space-y-3">
           <input type="hidden" name="postId" value={id} />
           <input type="hidden" name="postSource" value={source} />
           <label className="block text-sm">
-            <span className="mb-1 block text-warmgray">Comment</span>
+            <span className="mb-1 block text-muted">Comment</span>
             <textarea
               name="body"
               required
@@ -207,7 +218,7 @@ export default async function PostDetailPage({
       <section className="mt-8">
         <h2 className="mb-3 text-lg font-semibold">Comments</h2>
         {comments.length === 0 && (
-          <div className="rounded-xl border border-line bg-white px-6 py-8 text-center text-sm text-warmgray shadow-sm">
+          <div className="rounded-xl border border-edge bg-card px-6 py-8 text-center text-sm text-muted shadow-sm">
             No comments yet.
           </div>
         )}
@@ -215,10 +226,10 @@ export default async function PostDetailPage({
           {comments.map((c) => (
             <li
               key={c.$id}
-              className="rounded-xl border border-line bg-white p-4 shadow-sm sm:p-5"
+              className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-5"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-warmgray">
+                <p className="text-xs text-muted">
                   {new Date(c.$createdAt).toLocaleDateString("en-US", {
                     year: "numeric",
                     month: "short",
@@ -227,11 +238,11 @@ export default async function PostDetailPage({
                 </p>
                 <IssueStatusChip status={c.status} />
               </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-charcoal/90">
+              <p className="mt-2 whitespace-pre-wrap text-sm text-fg/90">
                 {c.body}
               </p>
               {c.response && (
-                <div className="mt-3 rounded-lg bg-mist p-3">
+                <div className="mt-3 rounded-lg bg-app p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber">
                     Awaj ET replied
                   </p>

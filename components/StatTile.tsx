@@ -24,28 +24,28 @@ export function StatTile({
   const dir = delta === null || delta === 0 ? null : delta > 0 ? "up" : "down";
   const isGood = dir === null ? null : dir === deltaGoodDirection;
   const color =
-    isGood === null ? "text-warmgray" : isGood ? "text-green-700" : "text-red-600";
+    isGood === null ? "text-muted" : isGood ? "text-green-700" : "text-red-600";
   const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "";
 
   return (
-    <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
-      <p className="font-mono text-[10px] font-medium tracking-wide text-warmgray uppercase">
+    <div className="rounded-xl border border-edge bg-card p-4 shadow-sm">
+      <p className="font-mono text-[10px] font-medium tracking-wide text-muted uppercase">
         {label}
       </p>
-      <p className="mt-1 font-display text-2xl font-bold text-charcoal">
+      <p className="mt-1 font-display text-2xl font-bold text-fg">
         {unavailable ? "—" : value}
       </p>
       <p className="mt-1 text-xs">
         {unavailable ? (
-          <span className="text-warmgray">{unavailable}</span>
+          <span className="text-muted">{unavailable}</span>
         ) : delta === null ? (
-          <span className="text-warmgray">vs {periodLabel}</span>
+          <span className="text-muted">vs {periodLabel}</span>
         ) : (
           <>
             <span className={`font-semibold ${color}`}>
               {arrow} {Math.abs(delta).toFixed(0)}%
             </span>{" "}
-            <span className="text-warmgray">vs {periodLabel}</span>
+            <span className="text-muted">vs {periodLabel}</span>
           </>
         )}
       </p>

@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function PostCard() {
   return (
-    <div className="rounded-lg border border-line bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-edge bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <Skeleton className="h-3 w-28" />
         <Skeleton className="h-3 w-16" />
@@ -37,7 +37,7 @@ export default function CalendarLoading() {
         ))}
       </div>
 
-      <div className="mt-4 grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-line bg-line">
+      <div className="mt-4 grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-edge bg-line">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div key={d} className="bg-navy px-2 py-2 text-center">
             <span className="font-mono text-[10px] tracking-wider text-white/30 uppercase">
@@ -46,14 +46,14 @@ export default function CalendarLoading() {
           </div>
         ))}
         {Array.from({ length: 35 }, (_, i) => (
-          <div key={i} className="min-h-28 bg-white p-1.5">
+          <div key={i} className="min-h-28 bg-card p-1.5">
             <Skeleton className="h-6 w-6 rounded-full" />
             <Skeleton className="mt-2 h-4 w-full" />
           </div>
         ))}
       </div>
 
-      <hr className="mt-10 border-line" />
+      <hr className="mt-10 border-edge" />
 
       <div className="mt-8">
         <Skeleton className="h-7 w-64" />

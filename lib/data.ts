@@ -323,7 +323,7 @@ export async function createPostComment(data: {
       postSource: data.postSource,
       title: data.title,
       body: data.body,
-      status: "in_progress",
+      status: "in_review",
     })
   )) as unknown as Issue;
 }

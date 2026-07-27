@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { igQueueConfigured } from "@/lib/env";
@@ -28,8 +29,8 @@ type CalEvent = {
 const KIND_STYLE: Record<CalEvent["kind"], string> = {
   scheduled: "bg-navy text-white",
   publishing: "bg-gold/20 text-amber",
-  published: "border border-line bg-white text-warmgray",
-  failed: "bg-red-100 text-red-700",
+  published: "border border-edge bg-card text-muted",
+  failed: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
 };
 
 /**
@@ -177,23 +178,25 @@ export default async function CalendarView({
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Link
           href={`${basePath}?m=${prev}`}
-          className="rounded-md border border-line bg-white px-3 py-1.5 text-sm hover:border-gold"
+          aria-label="Previous month"
+          className="flex items-center rounded-md border border-edge bg-card px-2.5 py-1.5 hover:border-gold"
         >
-          ←
+          <ChevronLeft className="h-4 w-4" />
         </Link>
         <span className="min-w-36 text-center font-display text-sm font-semibold">
           {monthLabel}
         </span>
         <Link
           href={`${basePath}?m=${next}`}
-          className="rounded-md border border-line bg-white px-3 py-1.5 text-sm hover:border-gold"
+          aria-label="Next month"
+          className="flex items-center rounded-md border border-edge bg-card px-2.5 py-1.5 hover:border-gold"
         >
-          →
+          <ChevronRight className="h-4 w-4" />
         </Link>
         {monthKey !== todayYmd.slice(0, 7) && (
           <Link
             href={basePath}
-            className="rounded-md border border-line bg-white px-3 py-1.5 font-mono text-[11px] text-warmgray hover:border-gold"
+            className="rounded-md border border-edge bg-card px-3 py-1.5 font-mono text-[11px] text-muted hover:border-gold"
           >
             Today
           </Link>
@@ -201,19 +204,19 @@ export default async function CalendarView({
       </div>
 
       {error && (
-        <p className="mt-6 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="mt-6 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
       )}
 
       {/* Legend */}
-      <div className="mt-5 flex flex-wrap gap-3 font-mono text-[10px] text-warmgray">
+      <div className="mt-5 flex flex-wrap gap-3 font-mono text-[10px] text-muted">
         <span>
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-navy align-middle" />
           scheduled
         </span>
         <span>
-          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-line bg-white align-middle" />
+          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-edge bg-card align-middle" />
           published
         </span>
         {!readOnly && (
@@ -231,7 +234,7 @@ export default async function CalendarView({
       </div>
 
       {/* Grid */}
-      <div className="mt-4 grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-line bg-line">
+      <div className="mt-4 grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-edge bg-line">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div
             key={d}
@@ -243,7 +246,7 @@ export default async function CalendarView({
 
         {cells.map((day, i) => {
           if (day === null) {
-            return <div key={`b${i}`} className="min-h-28 bg-mist/60" />;
+            return <div key={`b${i}`} className="min-h-28 bg-app/60" />;
           }
           const ymd = `${monthKey}-${String(day).padStart(2, "0")}`;
           const isToday = ymd === todayYmd;
@@ -252,14 +255,14 @@ export default async function CalendarView({
           return (
             <div
               key={ymd}
-              className={`group min-h-28 bg-white p-1.5 ${isPast ? "bg-white/70" : ""}`}
+              className={`group min-h-28 bg-card p-1.5 ${isPast ? "bg-card/70" : ""}`}
             >
               <div className="flex items-center justify-between">
                 <span
                   className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
                     isToday
                       ? "bg-gold font-bold text-navy"
-                      : "font-medium text-warmgray"
+                      : "font-medium text-muted"
                   }`}
                 >
                   {day}
@@ -268,9 +271,9 @@ export default async function CalendarView({
                   <Link
                     href={`/?when=${ymd}T09:00`}
                     title="Compose for this day"
-                    className="hidden h-5 w-5 items-center justify-center rounded-full bg-mist text-xs text-warmgray group-hover:flex hover:bg-gold hover:text-navy"
+                    className="hidden h-5 w-5 items-center justify-center rounded-full bg-app text-xs text-muted group-hover:flex hover:bg-gold hover:text-navy"
                   >
-                    +
+                    <Plus className="h-3 w-3" />
                   </Link>
                 )}
               </div>
@@ -306,7 +309,7 @@ export default async function CalendarView({
                   )
                 )}
                 {dayEvents.length > 4 && (
-                  <span className="px-1.5 font-mono text-[10px] text-warmgray">
+                  <span className="px-1.5 font-mono text-[10px] text-muted">
                     +{dayEvents.length - 4} more
                   </span>
                 )}
@@ -316,7 +319,7 @@ export default async function CalendarView({
         })}
       </div>
 
-      <p className="mt-3 font-mono text-[10px] text-warmgray">
+      <p className="mt-3 font-mono text-[10px] text-muted">
         Published history shows the 25 most recent posts per platform —
         older days may look empty.
         {!readOnly && " Hover a day and hit + to compose for it."}

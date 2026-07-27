@@ -108,12 +108,12 @@ export interface CampaignCost {
 }
 
 /** "approved" only applies to post comments (see postId below) — a client sign-off on a post. */
-export const ISSUE_STATUSES = ["open", "in_progress", "resolved", "approved"] as const;
+export const ISSUE_STATUSES = ["open", "in_review", "resolved", "approved"] as const;
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
 export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
   open: "Open",
-  in_progress: "In progress",
+  in_review: "In review",
   resolved: "Resolved",
   approved: "Approved",
 };

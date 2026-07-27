@@ -20,7 +20,7 @@ export function Select({ value, onValueChange, options, placeholder = "Select…
   return (
     <SelectPrimitive.Root value={value || undefined} onValueChange={onValueChange}>
       <SelectPrimitive.Trigger
-        className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-md border border-charcoal/20 bg-white px-3 py-2 text-left text-sm text-charcoal focus:border-gold focus:outline-none data-[placeholder]:text-smoke ${className}`}
+        className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-md border border-charcoal/20 bg-card px-3 py-2 text-left text-sm text-fg focus:border-gold focus:outline-none data-[placeholder]:text-smoke ${className}`}
       >
         <span className="truncate">
           <SelectPrimitive.Value placeholder={placeholder} />
@@ -35,14 +35,14 @@ export function Select({ value, onValueChange, options, placeholder = "Select…
         <SelectPrimitive.Content
           position="popper"
           sideOffset={4}
-          className="z-50 max-h-72 w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-charcoal/10 bg-white shadow-lg"
+          className="z-50 max-h-72 w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-charcoal/10 bg-card shadow-lg"
         >
           <SelectPrimitive.Viewport className="p-1">
             {options.map((o) => (
               <SelectPrimitive.Item
                 key={o.value}
                 value={o.value}
-                className="cursor-pointer rounded px-3 py-2.5 text-sm text-charcoal outline-none data-[highlighted]:bg-gold/15 data-[highlighted]:text-amber data-[state=checked]:font-semibold"
+                className="cursor-pointer rounded px-3 py-2.5 text-sm text-fg outline-none data-[highlighted]:bg-gold/15 data-[highlighted]:text-amber data-[state=checked]:font-semibold"
               >
                 <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
               </SelectPrimitive.Item>

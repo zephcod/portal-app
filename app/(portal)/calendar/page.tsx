@@ -18,7 +18,7 @@ export default async function ClientCalendarPage({
   return (
     <div>
       <h1 className="text-2xl font-bold">Content calendar</h1>
-      <p className="mt-1 text-sm text-warmgray">
+      <p className="mt-1 text-sm text-muted">
         {ctx?.page.name ?? "Your page"} · scheduled and published posts,
         ET time.
       </p>
@@ -32,7 +32,7 @@ export default async function ClientCalendarPage({
         />
       </div>
 
-      <hr className="mt-10 border-line" />
+      <hr className="mt-10 border-edge" />
 
       <div className="mt-8">
         <PostsList page={ctx?.page ?? null} error={error} />

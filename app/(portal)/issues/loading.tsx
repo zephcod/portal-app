@@ -9,7 +9,7 @@ export default function IssuesLoading() {
         <Skeleton className="h-4 w-full max-w-md" />
       </header>
 
-      <section className="rounded-xl border border-line bg-white p-4 shadow-sm sm:p-6">
+      <section className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
         <Skeleton className="mb-4 h-5 w-32" />
         <div className="space-y-3">
           <Skeleton className="h-9 w-full rounded-md" />
@@ -24,7 +24,7 @@ export default function IssuesLoading() {
           {Array.from({ length: 3 }, (_, i) => (
             <li
               key={i}
-              className="rounded-xl border border-line bg-white p-4 shadow-sm sm:p-5"
+              className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-5"
             >
               <div className="flex items-center justify-between gap-2">
                 <Skeleton className="h-4 w-40" />

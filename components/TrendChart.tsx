@@ -40,7 +40,7 @@ export function TrendChart({
 
   if (data.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-warmgray">
+      <div className="flex h-64 items-center justify-center text-sm text-muted">
         No data for this period yet.
       </div>
     );
@@ -163,7 +163,7 @@ export function TrendChart({
               ["leads", "Leads"],
             ] as const
           ).map(([key, label]) => (
-            <span key={key} className="inline-flex items-center gap-1.5 text-warmgray">
+            <span key={key} className="inline-flex items-center gap-1.5 text-muted">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-sm"
                 style={{ background: COLORS[key] }}
@@ -172,7 +172,7 @@ export function TrendChart({
             </span>
           ))}
         </div>
-        <div className="font-mono text-warmgray">
+        <div className="font-mono text-muted">
           {h
             ? `${h.date} · ${currency} ${h.spend.toLocaleString()} · ${h.clicks.toLocaleString()} clicks · ${h.leads.toLocaleString()} leads`
             : "Hover the chart for daily detail"}

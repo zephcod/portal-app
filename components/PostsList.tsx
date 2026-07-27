@@ -1,3 +1,4 @@
+import { ArrowUpRight, Heart, MessageCircle, Repeat2 } from "lucide-react";
 import Link from "next/link";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { igQueueConfigured } from "@/lib/env";
@@ -75,25 +76,25 @@ export default async function PostsList({
   return (
     <div>
       <h2 className="text-2xl font-bold">Your content plan</h2>
-      <p className="mt-1 text-sm text-warmgray">
+      <p className="mt-1 text-sm text-muted">
         Posts Awaj ET has scheduled and published for{" "}
         {page?.name ?? "your page"}.
       </p>
 
       {error && (
-        <p className="mt-6 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="mt-6 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
       )}
 
       {!error && (
         <>
-          <h3 className="mt-8 font-mono text-xs font-semibold tracking-[0.14em] text-warmgray uppercase">
+          <h3 className="mt-8 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
             Upcoming ({upcoming.length})
           </h3>
           {upcoming.length === 0 && (
-            <div className="mt-3 rounded-lg border border-dashed border-line bg-white/60 p-8 text-center">
-              <p className="text-sm text-warmgray">
+            <div className="mt-3 rounded-lg border border-dashed border-edge bg-card/60 p-8 text-center">
+              <p className="text-sm text-muted">
                 Nothing scheduled right now.
               </p>
             </div>
@@ -103,20 +104,20 @@ export default async function PostsList({
               <li key={u.key}>
                 <Link
                   href={u.href}
-                  className="block rounded-lg border border-line bg-white p-4 shadow-sm transition-colors hover:border-gold"
+                  className="block rounded-lg border border-edge bg-card p-4 shadow-sm transition-colors hover:border-gold"
                 >
                   <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                     <span className="font-mono text-xs font-semibold text-amber">
                       {fmtDateTime(u.when)} EAT
                     </span>
-                    <span className="font-mono text-[10px] text-warmgray">
+                    <span className="font-mono text-[10px] text-muted">
                       {relativeFromNow(u.when)}
                     </span>
-                    <span className="inline-flex items-center gap-1 font-mono text-[10px] text-warmgray">
+                    <span className="inline-flex items-center gap-1 font-mono text-[10px] text-muted">
                       <PlatformIcon platform={u.platform} /> {u.platformLabel}
                     </span>
                     {u.badge && (
-                      <span className="rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] text-warmgray">
+                      <span className="rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] text-muted">
                         {u.badge}
                       </span>
                     )}
@@ -127,7 +128,7 @@ export default async function PostsList({
                       <img
                         src={u.image}
                         alt=""
-                        className="h-20 w-20 shrink-0 rounded-md border border-line object-cover"
+                        className="h-20 w-20 shrink-0 rounded-md border border-edge object-cover"
                       />
                     )}
                     <p className="text-sm whitespace-pre-wrap">{u.text}</p>
@@ -137,17 +138,17 @@ export default async function PostsList({
             ))}
           </ul>
 
-          <h3 className="mt-10 font-mono text-xs font-semibold tracking-[0.14em] text-warmgray uppercase">
+          <h3 className="mt-10 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
             Recently published
           </h3>
           <ul className="mt-3 flex flex-col gap-3">
             {published.slice(0, 10).map((p) => (
               <li
                 key={p.id}
-                className="rounded-lg border border-line bg-white p-4 shadow-sm"
+                className="rounded-lg border border-edge bg-card p-4 shadow-sm"
               >
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-mono text-xs text-warmgray">
+                  <span className="font-mono text-xs text-muted">
                     {fmtDateTime(p.created_time)} EAT
                   </span>
                   {p.permalink_url && (
@@ -155,15 +156,16 @@ export default async function PostsList({
                       href={p.permalink_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-[11px] text-amber underline"
+                      className="flex items-center gap-1 font-mono text-[11px] text-amber underline"
                     >
-                      View on Facebook ↗
+                      View on Facebook
+                      <ArrowUpRight className="h-3 w-3" />
                     </a>
                   )}
                 </div>
                 <Link
                   href={`/posts/${p.id}?source=fb-published`}
-                  className="-mx-1 block rounded-md px-1 transition-colors hover:bg-mist"
+                  className="-mx-1 block rounded-md px-1 transition-colors hover:bg-app"
                 >
                   <div className="mt-2 flex gap-4">
                     {p.full_picture && (
@@ -171,25 +173,31 @@ export default async function PostsList({
                       <img
                         src={p.full_picture}
                         alt=""
-                        className="h-20 w-20 shrink-0 rounded-md border border-line object-cover"
+                        className="h-20 w-20 shrink-0 rounded-md border border-edge object-cover"
                       />
                     )}
                     <p className="text-sm whitespace-pre-wrap">
                       {p.message || (
-                        <span className="text-warmgray italic">(photo post)</span>
+                        <span className="text-muted italic">(photo post)</span>
                       )}
                     </p>
                   </div>
-                  <div className="mt-3 flex gap-5 border-t border-line pt-3 font-mono text-[11px] text-warmgray">
-                    <span>♥ {p.reactions?.summary?.total_count ?? 0}</span>
-                    <span>💬 {p.comments?.summary?.total_count ?? 0}</span>
-                    <span>↻ {p.shares?.count ?? 0}</span>
+                  <div className="mt-3 flex gap-5 border-t border-edge pt-3 font-mono text-[11px] text-muted">
+                    <span className="flex items-center gap-1">
+                      <Heart className="h-3 w-3" /> {p.reactions?.summary?.total_count ?? 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MessageCircle className="h-3 w-3" /> {p.comments?.summary?.total_count ?? 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Repeat2 className="h-3 w-3" /> {p.shares?.count ?? 0}
+                    </span>
                   </div>
                 </Link>
               </li>
             ))}
             {published.length === 0 && (
-              <li className="text-sm text-warmgray">No published posts yet.</li>
+              <li className="text-sm text-muted">No published posts yet.</li>
             )}
           </ul>
         </>

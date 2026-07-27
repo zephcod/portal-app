@@ -19,7 +19,7 @@ export default async function PortalLayout({
   return (
     <NavShell
       items={PORTAL_NAV}
-      subtitle="Client Portal"
+      subtitle="Client Portal App"
       homeHref="/"
       centerTitle={companyName}
       extra={

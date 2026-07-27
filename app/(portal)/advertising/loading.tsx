@@ -16,7 +16,7 @@ export default function DashboardLoading() {
         {Array.from({ length: 8 }, (_, i) => (
           <div
             key={i}
-            className="rounded-xl border border-line bg-white p-4 shadow-sm"
+            className="rounded-xl border border-edge bg-card p-4 shadow-sm"
           >
             <Skeleton className="h-3 w-20" />
             <Skeleton className="mt-2 h-6 w-16" />
@@ -24,12 +24,12 @@ export default function DashboardLoading() {
         ))}
       </section>
 
-      <section className="mt-8 rounded-xl border border-line bg-white p-4 shadow-sm sm:p-6">
+      <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
         <Skeleton className="mb-4 h-5 w-40" />
         <Skeleton className="h-56 w-full" />
       </section>
 
-      <section className="mt-8 rounded-xl border border-line bg-white shadow-sm">
+      <section className="mt-8 rounded-xl border border-edge bg-card shadow-sm">
         <div className="px-4 pt-5 sm:px-6">
           <Skeleton className="h-5 w-28" />
         </div>

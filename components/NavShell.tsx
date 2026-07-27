@@ -11,10 +11,13 @@
  * its company name.
  */
 import * as Dialog from "@radix-ui/react-dialog";
+import { LogOut, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logout } from "@/app/login/actions";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { AwajMark } from "./icons/AwajMark";
 
 export interface NavItem {
   href: string;
@@ -33,9 +36,12 @@ function activeHref(pathname: string, items: NavItem[]): string | undefined {
 function Brand({ subtitle, homeHref }: { subtitle: string; homeHref?: string }) {
   const content = (
     <>
-      <p className="font-display text-xl font-bold tracking-tight">
-        Awaj<span className="text-gold"> ET</span>
-      </p>
+      <div className="flex items-center gap-2">
+        <AwajMark className="h-7 w-7 shrink-0" aria-hidden />
+        <p className="font-display text-xl font-bold tracking-tight">
+          Awaj<span className="text-gold"> ET</span>
+        </p>
+      </div>
       <p className="mt-1 font-mono text-[10px] tracking-[0.18em] text-white/40 uppercase">
         {subtitle}
       </p>
@@ -89,8 +95,9 @@ function NavLinks({
 function SignOut() {
   return (
     <form action={logout}>
-      <button className="font-mono text-[10px] tracking-[0.14em] text-white/40 uppercase transition-colors hover:text-amber">
-        🔒 Sign out
+      <button className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-white/40 uppercase transition-colors hover:text-amber">
+        <LogOut className="h-3 w-3" aria-hidden />
+        Sign out
       </button>
     </form>
   );
@@ -99,11 +106,9 @@ function SignOut() {
 function Tagline() {
   return (
     <p className="font-mono text-[10px] leading-relaxed tracking-wider text-white/30 uppercase">
-      From pitch to profit
+      From post to profit
       <br />
-      let Awaj handle
-      <br />
-      <span className="text-gold/60">the journey.</span>
+      <span className="text-gold/60">Grow with AwajET.</span>
     </p>
   );
 }
@@ -121,7 +126,7 @@ export function DesktopSidebar({
 }) {
   const pathname = usePathname();
   return (
-    <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col bg-navy text-white lg:flex print:!hidden">
+    <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col bg-navy text-white lg:flex dark:border-r dark:border-white/10 print:!hidden">
       <div className="px-6 pt-8 pb-4">
         <Brand subtitle={subtitle} homeHref={homeHref} />
       </div>
@@ -129,8 +134,9 @@ export function DesktopSidebar({
       <NavLinks items={items} pathname={pathname} />
       <div className="mt-auto px-6 pb-8">
         <Tagline />
-        <div className="mt-5">
+        <div className="mt-5 flex items-center justify-between">
           <SignOut />
+          <ThemeToggle />
         </div>
       </div>
     </aside>
@@ -159,20 +165,13 @@ export function DrawerNav({
   useEffect(() => setOpen(false), [pathname]);
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between gap-2 bg-navy px-4 py-3 lg:hidden print:!hidden">
+    <header className="sticky top-0 z-40 flex items-center justify-between gap-2 bg-navy px-4 py-3 lg:hidden dark:border-b dark:border-white/10 print:!hidden">
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Trigger
           aria-label="Open menu"
           className="rounded-md p-2 text-white/80 hover:bg-white/10 hover:text-white"
         >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
-            <path
-              d="M3 5h14M3 10h14M3 15h14"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-          </svg>
+          <Menu className="h-5 w-5" aria-hidden />
         </Dialog.Trigger>
 
         <Dialog.Portal>
@@ -189,14 +188,7 @@ export function DrawerNav({
                 aria-label="Close menu"
                 className="rounded-md p-2 text-white/60 hover:bg-white/10 hover:text-white"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                  <path
-                    d="M3 3l10 10M13 3L3 13"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <X className="h-4 w-4" aria-hidden />
               </Dialog.Close>
             </div>
 
@@ -206,8 +198,9 @@ export function DrawerNav({
 
             <div className="mt-auto">
               <Tagline />
-              <div className="mt-5">
+              <div className="mt-5 flex items-center justify-between">
                 <SignOut />
+                <ThemeToggle />
               </div>
             </div>
           </Dialog.Content>
@@ -225,12 +218,14 @@ export function DrawerNav({
       {homeHref ? (
         <Link
           href={homeHref}
-          className="shrink-0 font-display text-lg font-bold text-white transition-opacity hover:opacity-80"
+          className="flex shrink-0 items-center gap-1.5 font-display text-lg font-bold text-white transition-opacity hover:opacity-80"
         >
+          <AwajMark className="h-6 w-6" aria-hidden />
           Awaj<span className="text-gold"> ET</span>
         </Link>
       ) : (
-        <span className="shrink-0 font-display text-lg font-bold text-white">
+        <span className="flex shrink-0 items-center gap-1.5 font-display text-lg font-bold text-white">
+          <AwajMark className="h-6 w-6" aria-hidden />
           Awaj<span className="text-gold"> ET</span>
         </span>
       )}

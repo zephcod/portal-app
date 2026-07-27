@@ -15,7 +15,7 @@ export default async function ClientInsightsPage({
   return (
     <div>
       <h1 className="text-2xl font-bold">Organic Insights</h1>
-      <p className="mt-1 text-sm text-warmgray">
+      <p className="mt-1 text-sm text-muted">
         {ctx?.page.name ?? "Your page"}  ·  reach and engagement across platforms.
       </p>
       <div className="mt-4">
