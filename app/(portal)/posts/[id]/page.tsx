@@ -124,10 +124,10 @@ export default async function PostDetailPage({
   return (
     <div className="mx-auto max-w-2xl">
       <Link
-        href="/posts"
+        href="/calendar"
         className="font-mono text-xs text-warmgray hover:text-charcoal"
       >
-        ← Back to posts
+        ← Back to content hub
       </Link>
 
       <div className="mt-4 rounded-xl border border-line bg-white p-6 shadow-sm">

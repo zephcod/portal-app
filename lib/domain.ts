@@ -220,3 +220,20 @@ export function rangeToDates(key: string): { since: string; until: string } {
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return { since: fmt(since), until: fmt(until) };
 }
+
+/** The period immediately preceding [since, until], same length — for period-over-period deltas. */
+export function previousRange(since: string, until: string): { since: string; until: string } {
+  const s = new Date(`${since}T00:00:00Z`);
+  const u = new Date(`${until}T00:00:00Z`);
+  const days = Math.round((u.getTime() - s.getTime()) / 86_400_000) + 1;
+  const prevUntil = new Date(s.getTime() - 86_400_000);
+  const prevSince = new Date(prevUntil.getTime() - (days - 1) * 86_400_000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { since: fmt(prevSince), until: fmt(prevUntil) };
+}
+
+/** % change vs a prior value; null when there's no meaningful baseline (prior was 0). */
+export function pctChange(current: number, previous: number): number | null {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+}

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { igQueueConfigured } from "@/lib/env";
-import { getClientPage } from "@/lib/clientpage";
 import {
   listPublishedPosts,
   listScheduledPosts,
@@ -10,29 +9,33 @@ import {
 } from "@/lib/facebook";
 import { fmtDateTime, relativeFromNow } from "@/lib/format";
 import { listIgQueue, type IgQueueItem } from "@/lib/igqueue";
+import type { ManagedPage } from "@/lib/pages";
 
-export const dynamic = "force-dynamic";
-
-export default async function ClientPostsPage() {
-  const ctx = await getClientPage();
-
+/**
+ * Upcoming (scheduled + IG-queued) and recently published posts for one
+ * page. Server component embedded below the calendar in Content Hub.
+ */
+export default async function PostsList({
+  page,
+  error: externalError,
+}: {
+  page: ManagedPage | null;
+  error?: string | null;
+}) {
   let fbScheduled: ScheduledPost[] = [];
   let igQueued: IgQueueItem[] = [];
   let published: PublishedPost[] = [];
-  let error: string | null = null;
+  let error: string | null = externalError ?? null;
 
-  if (!ctx) {
-    error =
-      "Your account isn't linked to a page yet — contact your Awaj ET account manager.";
-  } else {
+  if (!error && page) {
     try {
       [fbScheduled, published] = await Promise.all([
-        listScheduledPosts(ctx.page),
-        listPublishedPosts(ctx.page),
+        listScheduledPosts(page),
+        listPublishedPosts(page),
       ]);
       if (igQueueConfigured()) {
         // Clients see only cleanly pending items — no failure internals.
-        igQueued = (await listIgQueue(ctx.page.id)).filter(
+        igQueued = (await listIgQueue(page.id)).filter(
           (i) => i.status === "pending" || i.status === "publishing"
         );
       }
@@ -50,8 +53,7 @@ export default async function ClientPostsPage() {
       platformLabel: "Facebook",
       text: p.message || "(photo post)",
       image: p.full_picture,
-      badge:
-        undefined as string | undefined,
+      badge: undefined as string | undefined,
     })),
     ...igQueued.map((i) => ({
       key: `ig-${i.$id}`,
@@ -72,10 +74,10 @@ export default async function ClientPostsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Your content plan</h1>
+      <h2 className="text-2xl font-bold">Your content plan</h2>
       <p className="mt-1 text-sm text-warmgray">
         Posts Awaj ET has scheduled and published for{" "}
-        {ctx?.page.name ?? "your page"}. Times in Ethiopia time (EAT).
+        {page?.name ?? "your page"}.
       </p>
 
       {error && (
@@ -86,9 +88,9 @@ export default async function ClientPostsPage() {
 
       {!error && (
         <>
-          <h2 className="mt-8 font-mono text-xs font-semibold tracking-[0.14em] text-warmgray uppercase">
+          <h3 className="mt-8 font-mono text-xs font-semibold tracking-[0.14em] text-warmgray uppercase">
             Upcoming ({upcoming.length})
-          </h2>
+          </h3>
           {upcoming.length === 0 && (
             <div className="mt-3 rounded-lg border border-dashed border-line bg-white/60 p-8 text-center">
               <p className="text-sm text-warmgray">
@@ -135,9 +137,9 @@ export default async function ClientPostsPage() {
             ))}
           </ul>
 
-          <h2 className="mt-10 font-mono text-xs font-semibold tracking-[0.14em] text-warmgray uppercase">
+          <h3 className="mt-10 font-mono text-xs font-semibold tracking-[0.14em] text-warmgray uppercase">
             Recently published
-          </h2>
+          </h3>
           <ul className="mt-3 flex flex-col gap-3">
             {published.slice(0, 10).map((p) => (
               <li

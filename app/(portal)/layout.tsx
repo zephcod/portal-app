@@ -2,11 +2,11 @@ import { NavShell } from "@/components/NavShell";
 import { getSession } from "@/lib/server-session";
 
 const PORTAL_NAV = [
-  { href: "/", label: "Dashboard", code: "01" },
-  { href: "/calendar", label: "Calendar", code: "02" },
-  { href: "/posts", label: "Scheduled Post", code: "03" },
+  { href: "/", label: "Overview", code: "01" },
+  { href: "/calendar", label: "Content Hub", code: "02" },
+  { href: "/advertising", label: "Advertising Insights", code: "03" },
   { href: "/insights", label: "Organic Insights", code: "04" },
-  { href: "/issues", label: "Issues", code: "05" },
+  { href: "/issues", label: "Support Requests", code: "05" },
 ];
 
 /** Client portal shell: drawer nav on mobile, sidebar on desktop. */

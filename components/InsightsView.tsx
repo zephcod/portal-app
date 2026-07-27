@@ -90,6 +90,8 @@ export default async function InsightsView({
   let fanCount: number | undefined;
   let igFollowers: number | undefined;
   let igUsername = "";
+  let fbPageViews: MetricSeries | null = null;
+  let igReach: MetricSeries | null = null;
   const fbCharts: MetricSeries[] = [];
   const igCharts: MetricSeries[] = [];
   let topFb: PublishedPost[] = [];
@@ -102,9 +104,12 @@ export default async function InsightsView({
       fanCount = page.fanCount;
 
       // FB metrics — fetched independently; failures skip silently.
+      // Meta deprecated page-level reach/impressions entirely
+      // ("page_impressions_unique"/"page_impressions" now error as invalid
+      // metric names) — "page_views_total" (profile views) is the closest
+      // still-live substitute, labeled "Page views" rather than "Reach".
       const fbMetricDefs: [string, string][] = [
-        ["page_impressions_unique", `Page reach (${days}d)`],
-        ["page_impressions", `Page impressions (${days}d)`],
+        ["page_views_total", `Page views (${days}d)`],
         ["page_post_engagements", `Post engagements (${days}d)`],
         ["page_video_views", `Video views (${days}d)`],
       ];
@@ -112,6 +117,7 @@ export default async function InsightsView({
         fbMetricDefs.map(([m, t]) => fbMetricSeries(page, m, t, since, until))
       );
       fbCharts.push(...fbResults.filter((s): s is MetricSeries => s !== null));
+      fbPageViews = fbCharts.find((s) => s.metric === "page_views_total") ?? null;
 
       // Top FB posts by engagement + posting-cadence counts
       const weekAgoMs = Date.now() - 7 * 86400 * 1000;
@@ -148,6 +154,7 @@ export default async function InsightsView({
             listIgMedia(page, ig.id, 25),
           ]);
           igFollowers = stats?.followers_count;
+          igReach = reach;
           if (reach) igCharts.push(reach);
           if (followerAdds) igCharts.push(followerAdds);
           topIg = [...media]
@@ -200,16 +207,16 @@ export default async function InsightsView({
             {typeof igFollowers === "number" && (
               <StatCard label="IG followers" value={igFollowers.toLocaleString()} />
             )}
-            {fbCharts[0] && (
+            {fbPageViews && (
               <StatCard
-                label={`FB reach (${days}d)`}
-                value={fbCharts[0].total.toLocaleString()}
+                label={`FB page views (${days}d)`}
+                value={fbPageViews.total.toLocaleString()}
               />
             )}
-            {igCharts[0] && (
+            {igReach && (
               <StatCard
                 label={`IG reach (${days}d)`}
-                value={igCharts[0].total.toLocaleString()}
+                value={igReach.total.toLocaleString()}
               />
             )}
             <StatCard
