@@ -27,7 +27,12 @@ type CalEvent = {
 };
 
 const KIND_STYLE: Record<CalEvent["kind"], string> = {
-  scheduled: "bg-navy text-white",
+  // Light sky-blue tint — reads as "upcoming/informational" and sits
+  // clearly apart from the gold "in progress" and red "failed" states,
+  // instead of the previous solid navy chip blending into the (also navy)
+  // dark-mode canvas and looking closer to an error/disabled state than
+  // an upcoming one.
+  scheduled: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
   publishing: "bg-gold/20 text-amber",
   published: "border border-edge bg-card text-muted",
   failed: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
@@ -212,7 +217,7 @@ export default async function CalendarView({
       {/* Legend */}
       <div className="mt-5 flex flex-wrap gap-3 font-mono text-[10px] text-muted">
         <span>
-          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-navy align-middle" />
+          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-sky-400 align-middle" />
           scheduled
         </span>
         <span>

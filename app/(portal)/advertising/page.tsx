@@ -1,9 +1,9 @@
-import { Fragment } from "react";
+import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSession } from "@/lib/server-session";
 import { MetricCard } from "@/components/MetricCard";
 import { RangeSelect } from "@/components/RangeSelect";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TrendChart, type TrendPoint } from "@/components/TrendChart";
 import { getCampaigns, getCompany, getCosts, getInsights } from "@/lib/data";
 import {
@@ -13,8 +13,10 @@ import {
   money,
   num,
   rangeToDates,
+  type Company,
   type InsightDaily,
 } from "@/lib/domain";
+import { getSession } from "@/lib/server-session";
 
 export const dynamic = "force-dynamic";
 
@@ -41,13 +43,56 @@ export default async function ReportPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const { range } = await searchParams;
+  const rangeKey = range ?? "30d";
+
+  // Fast, Appwrite-only lookups — render the header immediately, then
+  // stream in the metric cards/chart/tables below it.
   const session = await getSession();
   if (!session) notFound();
-  const companyId = session.cid;
-  const company = await getCompany(companyId);
+  const company = await getCompany(session.cid);
   if (!company) notFound();
 
-  const { since, until } = rangeToDates(range ?? "30d");
+  const { since, until } = rangeToDates(rangeKey);
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="font-display text-sm font-semibold text-amber">
+            Awaj ET · Campaign Report
+          </p>
+          <h1 className="mt-1 text-3xl font-bold">{company.name}</h1>
+          <p className="mt-1 text-sm text-muted">
+            {since} → {until}
+          </p>
+        </div>
+        <RangeSelect />
+      </header>
+
+      <Suspense fallback={<ReportBodySkeleton />}>
+        <ReportBody
+          companyId={session.cid}
+          company={company}
+          rangeKey={rangeKey}
+          range={range}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+async function ReportBody({
+  companyId,
+  company,
+  rangeKey,
+  range,
+}: {
+  companyId: string;
+  company: Company;
+  rangeKey: string;
+  range?: string;
+}) {
+  const { since, until } = rangeToDates(rangeKey);
   const [rawRows, campaigns, costs] = await Promise.all([
     getInsights(companyId, since, until),
     getCampaigns(companyId),
@@ -108,20 +153,7 @@ export default async function ReportPage({
   const hasGroups = groups.some((g) => g.parent !== null);
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="font-display text-sm font-semibold text-amber">
-            Awaj ET · Campaign Report
-          </p>
-          <h1 className="mt-1 text-3xl font-bold">{company.name}</h1>
-          <p className="mt-1 text-sm text-muted">
-            {since} → {until}
-          </p>
-        </div>
-        <RangeSelect />
-      </header>
-
+    <>
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard label="Ad Spend" value={money(totals.spend, cur)} />
         <MetricCard label="Impressions" value={num(totals.impressions)} />
@@ -284,6 +316,40 @@ export default async function ReportPage({
         Prepared by{" "}
         {company.accountManager ? `${company.accountManager} · Awaj ET` : "Awaj ET"}
       </footer>
-    </div>
+    </>
+  );
+}
+
+function ReportBodySkeleton() {
+  return (
+    <>
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div
+            key={i}
+            className="rounded-xl border border-edge bg-card p-4 shadow-sm"
+          >
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="mt-2 h-6 w-16" />
+          </div>
+        ))}
+      </section>
+
+      <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
+        <Skeleton className="mb-4 h-5 w-40" />
+        <Skeleton className="h-56 w-full" />
+      </section>
+
+      <section className="mt-8 rounded-xl border border-edge bg-card shadow-sm">
+        <div className="px-4 pt-5 sm:px-6">
+          <Skeleton className="h-5 w-28" />
+        </div>
+        <div className="mt-4 flex flex-col gap-3 px-4 pb-6 sm:px-6">
+          {Array.from({ length: 5 }, (_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
