@@ -266,9 +266,11 @@ export async function deleteCost(id: string): Promise<void> {
 
 // ── Issues ────────────────────────────────────────────────
 
+/** General issues only — post comments (postId set) live in the same collection but are excluded here. */
 export async function getIssues(companyId?: string): Promise<Issue[]> {
   return listAll<Issue>(COLLECTIONS.issues, [
     ...(companyId ? [Query.equal("companyId", companyId)] : []),
+    Query.isNull("postId"),
     Query.orderDesc("$createdAt"),
   ]);
 }
@@ -291,6 +293,39 @@ export async function updateIssue(
   data: { status?: IssueStatus; response?: string }
 ): Promise<void> {
   await withRetry(() => db().updateDocument(DB(), COLLECTIONS.issues, id, data));
+}
+
+// ── Post comments (borrows the issues collection, scoped by postId) ──
+
+export async function getPostComments(
+  companyId: string,
+  postId: string
+): Promise<Issue[]> {
+  return listAll<Issue>(COLLECTIONS.issues, [
+    Query.equal("companyId", companyId),
+    Query.equal("postId", postId),
+    Query.orderDesc("$createdAt"),
+  ]);
+}
+
+export async function createPostComment(data: {
+  companyId: string;
+  postId: string;
+  postSource: string;
+  /** URL of the post being commented on — doubles as the issue title. */
+  title: string;
+  body: string;
+}): Promise<Issue> {
+  return (await withRetry(() =>
+    db().createDocument(DB(), COLLECTIONS.issues, ID.unique(), {
+      companyId: data.companyId,
+      postId: data.postId,
+      postSource: data.postSource,
+      title: data.title,
+      body: data.body,
+      status: "in_progress",
+    })
+  )) as unknown as Issue;
 }
 
 export async function updateInsight(

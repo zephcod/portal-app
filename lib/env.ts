@@ -5,6 +5,9 @@ function req(name: string): string {
 }
 
 export const env = {
+  // ── Public app origin (for building absolute links, e.g. in comment titles) ──
+  appUrl: () => (process.env.APP_URL ?? "").replace(/\/+$/, ""),
+
   // ── Meta Graph API (social pages) ──
   systemToken: () => process.env.FB_SYSTEM_USER_TOKEN ?? "",
   pageIds: (): string[] => {

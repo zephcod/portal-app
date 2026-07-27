@@ -4,6 +4,7 @@ const STYLES: Record<IssueStatus, string> = {
   open: "bg-amber/15 text-amber",
   in_progress: "bg-gold/20 text-charcoal",
   resolved: "bg-charcoal/10 text-warmgray",
+  approved: "bg-green-100 text-green-700",
 };
 
 export function IssueStatusChip({ status }: { status: IssueStatus }) {

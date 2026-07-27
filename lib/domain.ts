@@ -107,15 +107,21 @@ export interface CampaignCost {
   date: string;
 }
 
-export const ISSUE_STATUSES = ["open", "in_progress", "resolved"] as const;
+/** "approved" only applies to post comments (see postId below) — a client sign-off on a post. */
+export const ISSUE_STATUSES = ["open", "in_progress", "resolved", "approved"] as const;
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
 export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
   open: "Open",
   in_progress: "In progress",
   resolved: "Resolved",
+  approved: "Approved",
 };
 
+/**
+ * A client issue/request — or, when `postId` is set, a comment left on
+ * one scheduled/published post (same collection, filtered by postId).
+ */
 export interface Issue {
   $id: string;
   $createdAt: string;
@@ -126,6 +132,10 @@ export interface Issue {
   status: IssueStatus;
   /** Awaj ET's reply, shown to the client. */
   response?: string;
+  /** Set only for post comments: the Graph post id / IG queue doc id. */
+  postId?: string;
+  /** Set only for post comments: which posts/[id] source it was left from. */
+  postSource?: string;
 }
 
 export interface MetricTotals {

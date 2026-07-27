@@ -63,3 +63,20 @@ export async function notifyNewIssue(opts: {
       `<i>Reply from the reports admin → Issues.</i>`
   );
 }
+
+/** New-post-comment notification. */
+export async function notifyNewPostComment(opts: {
+  companyName: string;
+  postId: string;
+  body: string;
+}): Promise<void> {
+  const excerpt =
+    opts.body.length > 300 ? `${opts.body.slice(0, 300)}…` : opts.body;
+  await sendTelegram(
+    `💬 <b>New post comment</b>\n` +
+      `<b>${esc(opts.companyName)}</b>\n\n` +
+      `${esc(excerpt)}\n\n` +
+      `<i>Post: ${esc(opts.postId)}</i>\n` +
+      `<i>Reply from the reports admin → Issues.</i>`
+  );
+}

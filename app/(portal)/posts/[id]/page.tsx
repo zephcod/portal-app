@@ -1,13 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { IssueStatusChip } from "@/components/IssueStatusChip";
+import { PlatformIcon } from "@/components/PlatformIcon";
+import SubmitButton from "@/components/SubmitButton";
 import { getClientPage } from "@/lib/clientpage";
+import { getPostComments } from "@/lib/data";
 import { getPublishedPost, getScheduledPost } from "@/lib/facebook";
 import { fmtDateTime, relativeFromNow } from "@/lib/format";
 import { getIgQueueItem } from "@/lib/igqueue";
 import { getIgMedia } from "@/lib/instagram";
-import { PlatformIcon } from "@/components/PlatformIcon";
+import { submitPostComment } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const inputCls =
+  "w-full rounded-md border border-charcoal/20 bg-white px-3 py-2 text-sm text-charcoal focus:border-gold focus:outline-none";
 
 type Source = "fb-scheduled" | "fb-published" | "ig-queue" | "ig-published";
 
@@ -111,6 +118,9 @@ export default async function PostDetailPage({
     };
   }
 
+  const comments = await getPostComments(ctx.session.cid, id);
+  const reviewStatus = comments[0]?.status ?? "in_progress";
+
   return (
     <div className="mx-auto max-w-2xl">
       <Link
@@ -129,6 +139,7 @@ export default async function PostDetailPage({
             <span className="rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] tracking-wide text-warmgray uppercase">
               {statusLabel}
             </span>
+            <IssueStatusChip status={reviewStatus} />
             {badge && (
               <span className="rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] text-warmgray">
                 {badge}
@@ -172,6 +183,67 @@ export default async function PostDetailPage({
           </div>
         )}
       </div>
+
+      <section className="mt-8 rounded-xl border border-line bg-white p-4 shadow-sm sm:p-6">
+        <h2 className="mb-4 text-lg font-semibold">Leave a comment</h2>
+        <form action={submitPostComment} className="space-y-3">
+          <input type="hidden" name="postId" value={id} />
+          <input type="hidden" name="postSource" value={source} />
+          <label className="block text-sm">
+            <span className="mb-1 block text-warmgray">Comment</span>
+            <textarea
+              name="body"
+              required
+              rows={4}
+              maxLength={4096}
+              placeholder="Feedback, change requests, or your approval — let us know what you think."
+              className={inputCls}
+            />
+          </label>
+          <SubmitButton>Submit comment</SubmitButton>
+        </form>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold">Comments</h2>
+        {comments.length === 0 && (
+          <div className="rounded-xl border border-line bg-white px-6 py-8 text-center text-sm text-warmgray shadow-sm">
+            No comments yet.
+          </div>
+        )}
+        <ul className="space-y-3">
+          {comments.map((c) => (
+            <li
+              key={c.$id}
+              className="rounded-xl border border-line bg-white p-4 shadow-sm sm:p-5"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-warmgray">
+                  {new Date(c.$createdAt).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </p>
+                <IssueStatusChip status={c.status} />
+              </div>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-charcoal/90">
+                {c.body}
+              </p>
+              {c.response && (
+                <div className="mt-3 rounded-lg bg-mist p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber">
+                    Awaj ET replied
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">
+                    {c.response}
+                  </p>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }
