@@ -12,6 +12,9 @@ import {
   DEFAULT_CURRENCY_MULTIPLIER,
   money,
   num,
+  pctChange,
+  previousRange,
+  RANGE_PRESETS,
   rangeToDates,
 } from "@/lib/domain";
 
@@ -37,9 +40,16 @@ export default async function CampaignDetailPage({
   const campaign = campaigns.find((c) => c.metaCampaignId === campaignId);
   if (!campaign) notFound();
 
-  const { since, until } = rangeToDates(range ?? "30d");
-  const [allRows, allCosts] = await Promise.all([
+  const rangeKey = range ?? "30d";
+  const { since, until } = rangeToDates(rangeKey);
+  const prev = previousRange(since, until);
+  const periodLabel = `prior ${(
+    RANGE_PRESETS.find((p) => p.key === rangeKey)?.label ?? "last 30 days"
+  ).replace(/^last /i, "")}`;
+
+  const [allRows, prevAllRows, allCosts] = await Promise.all([
     getInsights(companyId, since, until),
+    getInsights(companyId, prev.since, prev.until),
     getCosts(companyId, since, until),
   ]);
 
@@ -47,9 +57,13 @@ export default async function CampaignDetailPage({
   const rows = allRows
     .filter((r) => r.metaCampaignId === campaignId)
     .map((r) => ({ ...r, spend: r.spend * multiplier }));
+  const prevRows = prevAllRows
+    .filter((r) => r.metaCampaignId === campaignId)
+    .map((r) => ({ ...r, spend: r.spend * multiplier }));
   const costs = allCosts.filter((c) => c.metaCampaignId === campaignId);
 
   const totals = computeTotals(rows);
+  const prevTotals = computeTotals(prevRows);
   const costTotal = costs.reduce((n, c) => n + c.amount, 0);
   const totalInvestment = totals.spend + costTotal;
   const cur = company.currency || "ETB";
@@ -69,7 +83,7 @@ export default async function CampaignDetailPage({
             <ChevronLeft className="h-3.5 w-3.5" />
             All campaigns
           </Link>
-          <h1 className="mt-1 truncate text-3xl font-bold">{campaign.name}</h1>
+          <h1 className="font-display mt-1 truncate text-3xl font-bold">{campaign.name}</h1>
           <p className="mt-1 text-sm text-muted">
             {[campaign.objective, campaign.status].filter(Boolean).join(" · ")}
             {campaign.objective || campaign.status ? " · " : ""}
@@ -80,30 +94,59 @@ export default async function CampaignDetailPage({
       </header>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard label="Ad spend" value={money(totals.spend, cur)} />
-        <MetricCard label="Impressions" value={num(totals.impressions)} />
-        <MetricCard label="Reach" value={num(totals.reach)} />
+        <MetricCard
+          label="Ad spend"
+          value={money(totals.spend, cur)}
+          delta={pctChange(totals.spend, prevTotals.spend)}
+          periodLabel={periodLabel}
+          deltaGoodDirection="down"
+        />
+        <MetricCard
+          label="Impressions"
+          value={num(totals.impressions)}
+          delta={pctChange(totals.impressions, prevTotals.impressions)}
+          periodLabel={periodLabel}
+          tip="Total number of times this campaign's ads were displayed, including repeat views by the same person."
+        />
+        <MetricCard
+          label="Reach"
+          value={num(totals.reach)}
+          delta={pctChange(totals.reach, prevTotals.reach)}
+          periodLabel={periodLabel}
+          tip="Number of unique people who saw this campaign's ads at least once."
+        />
         <MetricCard
           label="Clicks"
           value={num(totals.clicks)}
           sub={`CPC ${money(totals.cpc, cur)}`}
+          delta={pctChange(totals.clicks, prevTotals.clicks)}
+          periodLabel={periodLabel}
         />
-        <MetricCard label="Leads" value={num(totals.leads)} />
+        <MetricCard
+          label="Leads"
+          value={num(totals.leads)}
+          delta={pctChange(totals.leads, prevTotals.leads)}
+          periodLabel={periodLabel}
+        />
         <MetricCard
           label="Cost per lead"
           value={totals.leads ? money(totals.cpl, cur) : "—"}
+          delta={totals.leads && prevTotals.leads ? pctChange(totals.cpl, prevTotals.cpl) : undefined}
+          periodLabel={periodLabel}
+          deltaGoodDirection="down"
+          tip="Ad spend divided by number of leads generated — lower is better."
         />
         <MetricCard label="Services" value={money(costTotal, cur)} />
         <MetricCard label="Total investment" value={money(totalInvestment, cur)} />
       </section>
 
       <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-        <h2 className="mb-4 text-lg font-semibold">Daily performance</h2>
+        <h2 className="font-display mb-4 text-lg font-semibold">Daily performance</h2>
         <TrendChart data={trend} currency={cur} />
       </section>
 
       <section className="mt-8 rounded-xl border border-edge bg-card shadow-sm">
-        <h2 className="px-4 pt-5 text-lg font-semibold sm:px-6">Daily breakdown</h2>
+        <h2 className="font-display px-4 pt-5 text-lg font-semibold sm:px-6">Daily breakdown</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -151,7 +194,7 @@ export default async function CampaignDetailPage({
 
       {costs.length > 0 && (
         <section className="mt-8 rounded-xl border border-edge bg-card shadow-sm">
-          <h2 className="px-4 pt-5 text-lg font-semibold sm:px-6">
+          <h2 className="font-display px-4 pt-5 text-lg font-semibold sm:px-6">
             Additional charges
           </h2>
           <div className="mt-3 overflow-x-auto">

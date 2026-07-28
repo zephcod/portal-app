@@ -1,6 +1,8 @@
 import { Heart, MessageCircle, Repeat2 } from "lucide-react";
 import Link from "next/link";
+import { InfoTip } from "@/components/InfoTip";
 import { PlatformIcon } from "@/components/PlatformIcon";
+import { pctChange } from "@/lib/domain";
 import { igQueueConfigured } from "@/lib/env";
 import {
   listPublishedPosts,
@@ -48,13 +50,51 @@ function BarChart({ series }: { series: MetricSeries }) {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+/**
+ * `delta` is % change vs the immediately preceding period of equal length
+ * ("prior Nd"). Omit it for snapshot metrics that don't have a meaningful
+ * period-over-period baseline (e.g. total follower counts).
+ */
+function StatCard({
+  label,
+  value,
+  delta,
+  tip,
+}: {
+  label: string;
+  value: string;
+  delta?: number | null;
+  /** One-line plain-language explanation, shown via a tap-to-open info icon. */
+  tip?: string;
+}) {
+  const dir = !delta ? null : delta > 0 ? "up" : "down";
+  const color =
+    dir === null
+      ? "text-muted"
+      : dir === "up"
+        ? "text-green-700 dark:text-green-400"
+        : "text-red-600 dark:text-red-400";
   return (
     <div className="rounded-lg border border-edge bg-card px-4 py-3 shadow-sm">
-      <p className="font-mono text-[10px] tracking-[0.14em] text-muted uppercase">
+      <p className="flex items-center gap-1 font-mono text-[10px] tracking-[0.14em] text-muted uppercase">
         {label}
+        {tip && <InfoTip text={tip} />}
       </p>
       <p className="mt-1 font-display text-2xl font-bold">{value}</p>
+      {delta !== undefined && (
+        <p className="mt-1 text-xs">
+          {delta === null ? (
+            <span className="text-muted">vs prior period</span>
+          ) : (
+            <>
+              <span className={`font-semibold ${color}`}>
+                {dir === "up" ? "↑" : "↓"} {Math.abs(delta).toFixed(0)}%
+              </span>{" "}
+              <span className="text-muted">vs prior period</span>
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }
@@ -86,18 +126,25 @@ export default async function InsightsView({
 }) {
   const until = Math.floor(Date.now() / 1000);
   const since = until - days * 86400;
+  // Immediately preceding window of equal length — the baseline every
+  // delta below compares against.
+  const prevUntil = since;
+  const prevSince = since - days * 86400;
 
   let error: string | null = externalError ?? null;
   let fanCount: number | undefined;
   let igFollowers: number | undefined;
   let igUsername = "";
   let fbPageViews: MetricSeries | null = null;
+  let fbPageViewsDelta: number | null = null;
   let igReach: MetricSeries | null = null;
+  let igReachDelta: number | null = null;
   const fbCharts: MetricSeries[] = [];
   const igCharts: MetricSeries[] = [];
   let topFb: PublishedPost[] = [];
   let topIg: IgMedia[] = [];
   let postsLastWeek = 0;
+  let postsLastWeekDelta: number | null = null;
   let scheduledAhead = 0;
 
   if (!error && page) {
@@ -114,14 +161,22 @@ export default async function InsightsView({
         ["page_post_engagements", `Post engagements (${days}d)`],
         ["page_video_views", `Video views (${days}d)`],
       ];
-      const fbResults = await Promise.all(
-        fbMetricDefs.map(([m, t]) => fbMetricSeries(page, m, t, since, until))
-      );
+      const [fbResults, fbPageViewsPrev] = await Promise.all([
+        Promise.all(fbMetricDefs.map(([m, t]) => fbMetricSeries(page, m, t, since, until))),
+        fbMetricSeries(page, "page_views_total", "Page views (prior)", prevSince, prevUntil),
+      ]);
       fbCharts.push(...fbResults.filter((s): s is MetricSeries => s !== null));
       fbPageViews = fbCharts.find((s) => s.metric === "page_views_total") ?? null;
+      fbPageViewsDelta = fbPageViews
+        ? pctChange(fbPageViews.total, fbPageViewsPrev?.total ?? 0)
+        : null;
 
-      // Top FB posts by engagement + posting-cadence counts
+      // Top FB posts by engagement + posting-cadence counts. "Last week" /
+      // "the week before" are always trailing-7-days windows from now,
+      // independent of the 7d/28d chart toggle above — cadence is about a
+      // steady weekly rhythm, not whatever range is being charted.
       const weekAgoMs = Date.now() - 7 * 86400 * 1000;
+      const twoWeeksAgoMs = Date.now() - 14 * 86400 * 1000;
       const posts = await listPublishedPosts(page);
       topFb = [...posts]
         .sort((a, b) => fbEngagement(b) - fbEngagement(a))
@@ -129,6 +184,10 @@ export default async function InsightsView({
       postsLastWeek += posts.filter(
         (p) => new Date(p.created_time).getTime() >= weekAgoMs
       ).length;
+      const fbPostsWeekBefore = posts.filter((p) => {
+        const t = new Date(p.created_time).getTime();
+        return t >= twoWeeksAgoMs && t < weekAgoMs;
+      }).length;
 
       // Scheduled ahead: FB native queue + pending IG queue items
       const fbScheduled = await listScheduledPosts(page);
@@ -144,31 +203,41 @@ export default async function InsightsView({
       }
 
       // Instagram — optional
+      let igPostsWeekBefore = 0;
       try {
         const ig = await getIgAccount(page);
         if (ig) {
           igUsername = ig.username ?? "";
-          const [stats, reach, followerAdds, media] = await Promise.all([
+          const [stats, reach, reachPrev, followerAdds, media] = await Promise.all([
             igAccountStats(page, ig.id),
             igMetricSeries(page, ig.id, "reach", `IG reach (${days}d)`, since, until),
+            igMetricSeries(page, ig.id, "reach", `IG reach (prior)`, prevSince, prevUntil),
             igMetricSeries(page, ig.id, "follower_count", `New IG followers (${days}d)`, since, until),
             listIgMedia(page, ig.id, 25),
           ]);
           igFollowers = stats?.followers_count;
           igReach = reach;
+          igReachDelta = reach ? pctChange(reach.total, reachPrev?.total ?? 0) : null;
           if (reach) igCharts.push(reach);
           if (followerAdds) igCharts.push(followerAdds);
           topIg = [...media]
             .sort((a, b) => igEngagement(b) - igEngagement(a))
             .slice(0, 5);
           const weekAgoIgMs = Date.now() - 7 * 86400 * 1000;
+          const twoWeeksAgoIgMs = Date.now() - 14 * 86400 * 1000;
           postsLastWeek += media.filter(
             (m) => m.timestamp && new Date(m.timestamp).getTime() >= weekAgoIgMs
           ).length;
+          igPostsWeekBefore = media.filter((m) => {
+            if (!m.timestamp) return false;
+            const t = new Date(m.timestamp).getTime();
+            return t >= twoWeeksAgoIgMs && t < weekAgoIgMs;
+          }).length;
         }
       } catch {
         // IG section optional
       }
+      postsLastWeekDelta = pctChange(postsLastWeek, fbPostsWeekBefore + igPostsWeekBefore);
     } catch (e) {
       error = e instanceof Error ? e.message : "Could not load insights.";
     }
@@ -212,17 +281,22 @@ export default async function InsightsView({
               <StatCard
                 label={`FB page views (${days}d)`}
                 value={fbPageViews.total.toLocaleString()}
+                delta={fbPageViewsDelta}
+                tip="Meta retired page-level reach for most Pages — this is the closest metric it still reports: how many times people visited your Facebook Page."
               />
             )}
             {igReach && (
               <StatCard
                 label={`IG reach (${days}d)`}
                 value={igReach.total.toLocaleString()}
+                delta={igReachDelta}
+                tip="Number of unique Instagram accounts that saw your content, at least once, in this period."
               />
             )}
             <StatCard
               label="Posts last week"
               value={postsLastWeek.toLocaleString()}
+              delta={postsLastWeekDelta}
             />
             <StatCard
               label="Scheduled ahead"

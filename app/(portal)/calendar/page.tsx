@@ -15,7 +15,7 @@ export default async function ClientCalendarPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Content calendar</h1>
+      <h1 className="font-display text-2xl font-bold">Content calendar</h1>
       <Suspense fallback={<CalendarBodySkeleton />}>
         <CalendarBody monthParam={m} />
       </Suspense>

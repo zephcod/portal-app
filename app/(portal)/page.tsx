@@ -2,6 +2,7 @@ import { ArrowUpRight, CalendarDays, Heart, MessageCircle, Repeat2 } from "lucid
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { InfoTip } from "@/components/InfoTip";
 import { MiniLineChart, type SeriesPoint } from "@/components/MiniLineChart";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { RangeSelect } from "@/components/RangeSelect";
@@ -59,6 +60,25 @@ const igEngagement = (m: IgMedia) => (m.like_count ?? 0) + (m.comments_count ?? 
 const unixOf = (ymd: string, endOfDay = false) =>
   Math.floor(new Date(`${ymd}T${endOfDay ? "23:59:59" : "00:00:00"}Z`).getTime() / 1000);
 
+/** Sum two daily series by date (union of both sets of dates), sorted ascending. */
+function sumSeries(a: SeriesPoint[], b: SeriesPoint[]): SeriesPoint[] {
+  const byDate = new Map<string, number>();
+  for (const p of a) byDate.set(p.date, (byDate.get(p.date) ?? 0) + p.value);
+  for (const p of b) byDate.set(p.date, (byDate.get(p.date) ?? 0) + p.value);
+  return [...byDate.entries()]
+    .map(([date, value]) => ({ date, value }))
+    .sort((x, y) => x.date.localeCompare(y.date));
+}
+
+/** Fold per-item {date, value} entries (e.g. one per IG post) into one point per day. */
+function bucketByDay(items: { date: string; value: number }[]): SeriesPoint[] {
+  const byDate = new Map<string, number>();
+  for (const it of items) byDate.set(it.date, (byDate.get(it.date) ?? 0) + it.value);
+  return [...byDate.entries()]
+    .map(([date, value]) => ({ date, value }))
+    .sort((x, y) => x.date.localeCompare(y.date));
+}
+
 export default async function OverviewPage({
   searchParams,
 }: {
@@ -78,7 +98,7 @@ export default async function OverviewPage({
     <div className="mx-auto max-w-6xl">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">
+          <h1 className="font-display text-3xl font-bold">
             {greeting()}, <br className="flex md:hidden" /> {company.name}{" "}
             <span aria-hidden>👋</span>
           </h1>
@@ -150,6 +170,10 @@ async function OverviewBody({
   }[] = [];
   let awaitingReview = 0;
   let topPosts: PublishedPost[] = [];
+  // Cadence gap: zero organic posts (FB + IG combined) in the trailing 7
+  // days — an early-warning signal, not an error, so it's a quiet dot in
+  // "Attention needed" rather than a banner.
+  let postsLastWeekCount = 0;
 
   if (!ctx) {
     organicError =
@@ -217,21 +241,36 @@ async function OverviewBody({
       let igFollowerAddsPrev: MetricSeries | null = null;
       let igMedia: IgMedia[] = [];
       let igQueueItems: Awaited<ReturnType<typeof listIgQueue>> = [];
+      // "profile_views" is Instagram's closest equivalent to Facebook's
+      // "page_views_total" — combined below so the Page views tile
+      // reflects visits across both platforms, not Facebook alone.
+      let igProfileViews: MetricSeries | null = null;
+      let igProfileViewsPrev: MetricSeries | null = null;
 
       if (ig) {
         try {
-          [igFollowerAdds, igFollowerAddsPrev, igMedia] = await Promise.all([
-            igMetricSeries(page, ig.id, "follower_count", "IG followers", sinceUnix, untilUnix),
-            igMetricSeries(
-              page,
-              ig.id,
-              "follower_count",
-              "IG followers",
-              prevSinceUnix,
-              prevUntilUnix
-            ),
-            listIgMedia(page, ig.id, 25),
-          ]);
+          [igFollowerAdds, igFollowerAddsPrev, igMedia, igProfileViews, igProfileViewsPrev] =
+            await Promise.all([
+              igMetricSeries(page, ig.id, "follower_count", "IG followers", sinceUnix, untilUnix),
+              igMetricSeries(
+                page,
+                ig.id,
+                "follower_count",
+                "IG followers",
+                prevSinceUnix,
+                prevUntilUnix
+              ),
+              listIgMedia(page, ig.id, 25),
+              igMetricSeries(page, ig.id, "profile_views", "Profile views", sinceUnix, untilUnix),
+              igMetricSeries(
+                page,
+                ig.id,
+                "profile_views",
+                "Profile views",
+                prevSinceUnix,
+                prevUntilUnix
+              ),
+            ]);
         } catch {
           // IG section is optional — FB-only data still renders.
         }
@@ -246,22 +285,29 @@ async function OverviewBody({
         }
       }
 
-      // ── Page views: FB only — no IG equivalent for profile views ──
-      pageViewsPoints = fbPageViews?.points ?? [];
-      pageViewsTotal = fbPageViews?.total ?? 0;
-      const pageViewsPrevTotal = fbPageViewsPrev?.total ?? 0;
+      // ── Page views: Facebook "page_views_total" + Instagram "profile_views"
+      // — Instagram's closest equivalent to Meta's now-retired page-level
+      // reach metrics — summed per day so both the headline number and the
+      // chart reflect visits across every connected platform. ──
+      pageViewsPoints = sumSeries(fbPageViews?.points ?? [], igProfileViews?.points ?? []);
+      pageViewsTotal = (fbPageViews?.total ?? 0) + (igProfileViews?.total ?? 0);
+      const pageViewsPrevTotal = (fbPageViewsPrev?.total ?? 0) + (igProfileViewsPrev?.total ?? 0);
       pageViewsDelta = pctChange(pageViewsTotal, pageViewsPrevTotal);
-      pageViewsAvailable = fbPageViews !== null;
+      pageViewsAvailable = fbPageViews !== null || igProfileViews !== null;
 
-      // ── Engagement: chart is Facebook's native daily series only — IG has
-      // no daily engagement metric, only per-post totals — but the headline
-      // number below includes IG engagement from recent published media. ──
-      engagementPoints = fbEng?.points ?? [];
-      const igEngagementInRange = igMedia
-        .filter(
-          (m) => m.timestamp && m.timestamp.slice(0, 10) >= since && m.timestamp.slice(0, 10) <= until
-        )
-        .reduce((n, m) => n + igEngagement(m), 0);
+      // ── Engagement: Facebook's native daily series + Instagram's
+      // per-post engagement bucketed into the same daily buckets (IG has
+      // no daily engagement metric, only per-post totals) — combined per
+      // day so the chart matches the "all platforms" headline number. ──
+      const igEngagementByDay = bucketByDay(
+        igMedia
+          .filter(
+            (m) => m.timestamp && m.timestamp.slice(0, 10) >= since && m.timestamp.slice(0, 10) <= until
+          )
+          .map((m) => ({ date: m.timestamp!.slice(0, 10), value: igEngagement(m) }))
+      );
+      engagementPoints = sumSeries(fbEng?.points ?? [], igEngagementByDay);
+      const igEngagementInRange = igEngagementByDay.reduce((n, p) => n + p.value, 0);
       const igEngagementPrevRange = igMedia
         .filter(
           (m) =>
@@ -310,6 +356,11 @@ async function OverviewBody({
       awaitingReview = reviewChecks.filter((approved) => !approved).length;
 
       topPosts = [...published].sort((a, b) => fbEngagement(b) - fbEngagement(a)).slice(0, 3);
+
+      const weekAgoMs = Date.now() - 7 * 86400 * 1000;
+      postsLastWeekCount =
+        published.filter((p) => new Date(p.created_time).getTime() >= weekAgoMs).length +
+        igMedia.filter((m) => m.timestamp && new Date(m.timestamp).getTime() >= weekAgoMs).length;
     } catch (e) {
       organicError = e instanceof Error ? e.message : "Could not load your social data.";
     }
@@ -326,12 +377,14 @@ async function OverviewBody({
           unavailable={
             !organicError && !pageViewsAvailable ? "Not reported by Meta for this page" : undefined
           }
+          tip="Meta retired page-level reach for most Pages — this is the closest metric it still reports: profile/page visits across Facebook and Instagram, combined."
         />
         <StatTile
           label="Engagement"
           value={num(engagementTotal)}
           delta={engagementDelta}
           periodLabel={periodLabel}
+          tip="Reactions, comments, and shares on your posts across Facebook and Instagram, combined."
         />
         <StatTile
           label="Followers"
@@ -341,41 +394,96 @@ async function OverviewBody({
           unavailable={
             !organicError && !followersAvailable ? "Not reported by Meta for this page" : undefined
           }
+          tip="Net new followers this period — new follows minus unfollows, across Facebook and Instagram."
         />
         <StatTile label="Ad leads" value={num(adTotals.leads)} delta={leadsDelta} periodLabel={periodLabel} />
       </section>
 
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-          <h2 className="mb-4 text-lg font-semibold">Organic performance</h2>
+          <h2 className="font-display mb-4 text-lg font-semibold">Organic performance</h2>
           {organicError ? (
             <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{organicError}</p>
           ) : (
             <div className="space-y-6">
               <MiniLineChart title="Page views" points={pageViewsPoints} color="#f0a93b" />
-              <MiniLineChart
-                title="Engagement (Facebook)"
-                points={engagementPoints}
-                color="#c97d1e"
-              />
+              <MiniLineChart title="Engagement" points={engagementPoints} color="#c97d1e" />
             </div>
           )}
         </div>
 
         <div className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-          <h2 className="mb-4 text-lg font-semibold">Ad performance</h2>
+          <h2 className="font-display mb-4 text-lg font-semibold">Ad performance</h2>
           <dl className="divide-y divide-line">
-            {[
-              ["Spend", money(adTotals.spend, cur)],
-              ["Leads", num(adTotals.leads)],
-              ["CPL", adTotals.leads ? money(adTotals.cpl, cur) : "—"],
-              ["CPR", adTotals.results ? money(adTotals.cpr, cur) : "—"],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between py-2.5 text-sm">
-                <dt className="text-muted">{label}</dt>
-                <dd className="font-display font-semibold">{value}</dd>
-              </div>
-            ))}
+            {(
+              [
+                {
+                  label: "Spend",
+                  value: money(adTotals.spend, cur),
+                  delta: pctChange(adTotals.spend, adTotalsPrev.spend),
+                  goodDir: "down" as const,
+                  tip: undefined as string | undefined,
+                },
+                {
+                  label: "Leads",
+                  value: num(adTotals.leads),
+                  delta: leadsDelta,
+                  goodDir: "up" as const,
+                  tip: undefined as string | undefined,
+                },
+                {
+                  label: "CPL",
+                  value: adTotals.leads ? money(adTotals.cpl, cur) : "—",
+                  delta:
+                    adTotals.leads && adTotalsPrev.leads
+                      ? pctChange(adTotals.cpl, adTotalsPrev.cpl)
+                      : null,
+                  goodDir: "down" as const,
+                  tip: "Ad spend divided by number of leads generated — lower is better.",
+                },
+                {
+                  label: "CPR",
+                  value: adTotals.results ? money(adTotals.cpr, cur) : "—",
+                  delta:
+                    adTotals.results && adTotalsPrev.results
+                      ? pctChange(adTotals.cpr, adTotalsPrev.cpr)
+                      : null,
+                  goodDir: "down" as const,
+                  tip: "Ad spend divided by total results (leads + calls) — lower is better.",
+                },
+              ] satisfies {
+                label: string;
+                value: string;
+                delta: number | null;
+                goodDir: "up" | "down";
+                tip?: string;
+              }[]
+            ).map(({ label, value, delta, goodDir, tip }) => {
+              const dir = delta === null || delta === 0 ? null : delta > 0 ? "up" : "down";
+              const isGood = dir === null ? null : dir === goodDir;
+              const deltaColor =
+                isGood === null
+                  ? "text-muted"
+                  : isGood
+                    ? "text-green-700 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400";
+              return (
+                <div key={label} className="flex items-center justify-between py-2.5 text-sm">
+                  <dt className="flex items-center gap-1 text-muted">
+                    {label}
+                    {tip && <InfoTip text={tip} />}
+                  </dt>
+                  <dd className="flex items-baseline gap-1.5">
+                    <span className="font-display font-semibold">{value}</span>
+                    {delta !== null && (
+                      <span className={`font-mono text-[10px] font-semibold ${deltaColor}`}>
+                        {dir === "up" ? "↑" : "↓"} {Math.abs(delta).toFixed(0)}%
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
           <Link
             href="/advertising"
@@ -389,7 +497,7 @@ async function OverviewBody({
 
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-          <h2 className="mb-4 text-lg font-semibold">Upcoming content</h2>
+          <h2 className="font-display mb-4 text-lg font-semibold">Upcoming content</h2>
           {upcoming.length === 0 ? (
             <p className="text-sm text-muted">
               {organicError ?? "Nothing scheduled right now."}
@@ -420,7 +528,7 @@ async function OverviewBody({
         </div>
 
         <div className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-          <h2 className="mb-4 text-lg font-semibold">Attention needed</h2>
+          <h2 className="font-display mb-4 text-lg font-semibold">Attention needed</h2>
           <ul className="flex flex-col gap-3 text-sm">
             <li>
               <Link href="/issues" className="flex items-center gap-2 hover:underline">
@@ -453,6 +561,19 @@ async function OverviewBody({
                 {activeCampaign ? "Campaign running" : "No active campaign"}
               </Link>
             </li>
+            {!organicError && (
+              <li>
+                <Link href="/calendar" className="flex items-center gap-2 hover:underline">
+                  <span
+                    className={`h-2.5 w-2.5 shrink-0 rounded-full ${postsLastWeekCount === 0 ? "bg-red-500" : "bg-green-500"}`}
+                    aria-hidden
+                  />
+                  {postsLastWeekCount === 0
+                    ? "No posts in the last 7 days"
+                    : `${postsLastWeekCount} post${postsLastWeekCount === 1 ? "" : "s"} in the last 7 days`}
+                </Link>
+              </li>
+            )}
           </ul>
           <Link href="/issues" className="mt-4 flex items-center gap-1 font-mono text-[11px] text-amber underline">
             View all
@@ -462,7 +583,7 @@ async function OverviewBody({
       </section>
 
       <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-        <h2 className="mb-4 text-lg font-semibold">Top performing content</h2>
+        <h2 className="font-display mb-4 text-lg font-semibold">Top performing content</h2>
         {topPosts.length === 0 ? (
           <p className="text-sm text-muted">{organicError ?? "No published posts yet."}</p>
         ) : (

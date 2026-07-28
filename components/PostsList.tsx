@@ -75,7 +75,7 @@ export default async function PostsList({
 
   return (
     <div>
-      <h2 className="text-2xl font-bold">Your content plan</h2>
+      <h2 className="font-display text-2xl font-bold">Your content plan</h2>
       <p className="mt-1 text-sm text-muted">
         Posts Awaj ET has scheduled and published for{" "}
         {page?.name ?? "your page"}.

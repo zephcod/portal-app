@@ -15,7 +15,7 @@ import { submitPostComment } from "./actions";
 export const dynamic = "force-dynamic";
 
 const inputCls =
-  "w-full rounded-md border border-charcoal/20 bg-card px-3 py-2 text-sm text-fg focus:border-gold focus:outline-none";
+  "w-full rounded-md border border-edge bg-input px-3 py-2 text-sm text-fg focus:border-gold focus:outline-none";
 
 type Source = "fb-scheduled" | "fb-published" | "ig-queue" | "ig-published";
 
@@ -196,7 +196,7 @@ export default async function PostDetailPage({
       </div>
 
       <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-        <h2 className="mb-4 text-lg font-semibold">Leave a comment</h2>
+        <h2 className="font-display mb-4 text-lg font-semibold">Leave a comment</h2>
         <form action={submitPostComment} className="space-y-3">
           <input type="hidden" name="postId" value={id} />
           <input type="hidden" name="postSource" value={source} />
@@ -216,7 +216,7 @@ export default async function PostDetailPage({
       </section>
 
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold">Comments</h2>
+        <h2 className="font-display mb-3 text-lg font-semibold">Comments</h2>
         {comments.length === 0 && (
           <div className="rounded-xl border border-edge bg-card px-6 py-8 text-center text-sm text-muted shadow-sm">
             No comments yet.

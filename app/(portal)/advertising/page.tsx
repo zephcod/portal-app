@@ -12,6 +12,9 @@ import {
   DEFAULT_CURRENCY_MULTIPLIER,
   money,
   num,
+  pctChange,
+  previousRange,
+  RANGE_PRESETS,
   rangeToDates,
   type Company,
   type InsightDaily,
@@ -61,7 +64,7 @@ export default async function ReportPage({
           <p className="font-display text-sm font-semibold text-amber">
             Awaj ET · Campaign Report
           </p>
-          <h1 className="mt-1 text-3xl font-bold">{company.name}</h1>
+          <h1 className="font-display mt-1 text-3xl font-bold">{company.name}</h1>
           <p className="mt-1 text-sm text-muted">
             {since} → {until}
           </p>
@@ -93,8 +96,14 @@ async function ReportBody({
   range?: string;
 }) {
   const { since, until } = rangeToDates(rangeKey);
-  const [rawRows, campaigns, costs] = await Promise.all([
+  const prev = previousRange(since, until);
+  const periodLabel = `prior ${(
+    RANGE_PRESETS.find((p) => p.key === rangeKey)?.label ?? "last 30 days"
+  ).replace(/^last /i, "")}`;
+
+  const [rawRows, prevRawRows, campaigns, costs] = await Promise.all([
     getInsights(companyId, since, until),
+    getInsights(companyId, prev.since, prev.until),
     getCampaigns(companyId),
     getCosts(companyId, since, until),
   ]);
@@ -102,8 +111,10 @@ async function ReportBody({
   // Convert synced spend into the report currency (e.g. USD → ETB).
   const multiplier = company.currencyMultiplier ?? DEFAULT_CURRENCY_MULTIPLIER;
   const rows = rawRows.map((r) => ({ ...r, spend: r.spend * multiplier }));
+  const prevRows = prevRawRows.map((r) => ({ ...r, spend: r.spend * multiplier }));
 
   const totals = computeTotals(rows);
+  const prevTotals = computeTotals(prevRows);
   const trend = toTrend(rows);
   const cur = company.currency || "ETB";
   const campaignName = new Map(campaigns.map((c) => [c.metaCampaignId, c.name]));
@@ -155,36 +166,73 @@ async function ReportBody({
   return (
     <>
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard label="Ad Spend" value={money(totals.spend, cur)} />
-        <MetricCard label="Impressions" value={num(totals.impressions)} />
-        <MetricCard label="Reach" value={num(totals.reach)} />
+        <MetricCard
+          label="Ad Spend"
+          value={money(totals.spend, cur)}
+          delta={pctChange(totals.spend, prevTotals.spend)}
+          periodLabel={periodLabel}
+          deltaGoodDirection="down"
+        />
+        <MetricCard
+          label="Impressions"
+          value={num(totals.impressions)}
+          delta={pctChange(totals.impressions, prevTotals.impressions)}
+          periodLabel={periodLabel}
+          tip="Total number of times your ads were displayed, including repeat views by the same person."
+        />
+        <MetricCard
+          label="Reach"
+          value={num(totals.reach)}
+          delta={pctChange(totals.reach, prevTotals.reach)}
+          periodLabel={periodLabel}
+          tip="Number of unique people who saw your ads at least once."
+        />
         <MetricCard
           label="Clicks"
           value={num(totals.clicks)}
           sub={`CPC ${money(totals.cpc, cur)}`}
+          delta={pctChange(totals.clicks, prevTotals.clicks)}
+          periodLabel={periodLabel}
         />
-        <MetricCard label="Leads" value={num(totals.leads)} />
+        <MetricCard
+          label="Leads"
+          value={num(totals.leads)}
+          delta={pctChange(totals.leads, prevTotals.leads)}
+          periodLabel={periodLabel}
+        />
         <MetricCard
           label="Cost per lead"
           value={totals.leads ? money(totals.cpl, cur) : "—"}
+          delta={totals.leads && prevTotals.leads ? pctChange(totals.cpl, prevTotals.cpl) : undefined}
+          periodLabel={periodLabel}
+          deltaGoodDirection="down"
+          tip="Ad spend divided by number of leads generated — lower is better."
         />
         <MetricCard
           label="CPR"
           value={totals.results ? money(totals.cpr, cur) : "—"}
+          delta={totals.results && prevTotals.results ? pctChange(totals.cpr, prevTotals.cpr) : undefined}
+          periodLabel={periodLabel}
+          deltaGoodDirection="down"
+          tip="Ad spend divided by total results (leads + calls) — lower is better."
         />
         <MetricCard
           label="CPC"
           value={totals.clicks ? money(totals.cpc, cur) : "—"}
+          delta={totals.clicks && prevTotals.clicks ? pctChange(totals.cpc, prevTotals.cpc) : undefined}
+          periodLabel={periodLabel}
+          deltaGoodDirection="down"
+          tip="Ad spend divided by number of clicks — lower is better."
         />
       </section>
 
       <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-        <h2 className="mb-4 text-lg font-semibold">Daily performance</h2>
+        <h2 className="font-display mb-4 text-lg font-semibold">Daily performance</h2>
         <TrendChart data={trend} currency={cur} />
       </section>
 
       <section className="mt-8 rounded-xl border border-edge bg-card shadow-sm">
-        <h2 className="px-4 pt-5 text-lg font-semibold sm:px-6">Campaigns</h2>
+        <h2 className="font-display px-4 pt-5 text-lg font-semibold sm:px-6">Campaigns</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -258,7 +306,7 @@ async function ReportBody({
 
       {costs.length > 0 && (
         <section className="mt-8 rounded-xl border border-edge bg-card shadow-sm">
-          <h2 className="px-4 pt-5 text-lg font-semibold sm:px-6">
+          <h2 className="font-display px-4 pt-5 text-lg font-semibold sm:px-6">
             Additional charges
           </h2>
           <div className="mt-3 overflow-x-auto">

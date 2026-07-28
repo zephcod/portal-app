@@ -15,7 +15,7 @@ export default async function ClientInsightsPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Organic Insights</h1>
+      <h1 className="font-display text-2xl font-bold">Organic Insights</h1>
       <Suspense fallback={<InsightsBodySkeleton />}>
         <InsightsBody days={days} />
       </Suspense>

@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
+import { KIND_STYLE, fmtDayLabel, type CalEvent } from "@/components/CalendarShared";
+import { DayMorePopover } from "@/components/DayMorePopover";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { igQueueConfigured } from "@/lib/env";
 import { listPublishedPosts, listScheduledPosts } from "@/lib/facebook";
@@ -17,26 +19,6 @@ function eatYmd(d: Date): string {
 function eatTime(d: Date): string {
   return new Date(d.getTime() + EAT_OFFSET_MS).toISOString().slice(11, 16);
 }
-
-type CalEvent = {
-  time: string; // HH:MM (EAT)
-  platform: "fb" | "ig";
-  kind: "scheduled" | "published" | "failed" | "publishing";
-  label: string;
-  href?: string;
-};
-
-const KIND_STYLE: Record<CalEvent["kind"], string> = {
-  // Light sky-blue tint — reads as "upcoming/informational" and sits
-  // clearly apart from the gold "in progress" and red "failed" states,
-  // instead of the previous solid navy chip blending into the (also navy)
-  // dark-mode canvas and looking closer to an error/disabled state than
-  // an upcoming one.
-  scheduled: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
-  publishing: "bg-gold/20 text-amber",
-  published: "border border-edge bg-card text-muted",
-  failed: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
-};
 
 /**
  * Month-grid calendar of scheduled + published posts for one page.
@@ -314,9 +296,11 @@ export default async function CalendarView({
                   )
                 )}
                 {dayEvents.length > 4 && (
-                  <span className="px-1.5 font-mono text-[10px] text-muted">
-                    +{dayEvents.length - 4} more
-                  </span>
+                  <DayMorePopover
+                    count={dayEvents.length - 4}
+                    dateLabel={fmtDayLabel(ymd)}
+                    events={dayEvents}
+                  />
                 )}
               </div>
             </div>
