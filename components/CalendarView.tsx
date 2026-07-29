@@ -3,7 +3,8 @@ import Link from "next/link";
 import { KIND_STYLE, fmtDayLabel, type CalEvent } from "@/components/CalendarShared";
 import { DayMorePopover } from "@/components/DayMorePopover";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { igQueueConfigured } from "@/lib/env";
+import { fbQueueConfigured, igQueueConfigured } from "@/lib/env";
+import { listFbQueue } from "@/lib/fbqueue";
 import { listPublishedPosts, listScheduledPosts } from "@/lib/facebook";
 import { listIgQueue } from "@/lib/igqueue";
 import { getIgAccount, listIgMedia } from "@/lib/instagram";
@@ -100,6 +101,31 @@ export default async function CalendarView({
             ? `/posts/${p.id}?source=fb-published`
             : p.permalink_url,
         });
+      }
+
+      // Facebook queue — scheduling now runs through Appwrite, not
+      // Facebook's own scheduler (see the Social Platform Manager's
+      // lib/fbqueue.ts); `fbScheduled` above only shows pre-migration
+      // legacy posts and shrinks over time.
+      if (fbQueueConfigured()) {
+        for (const item of await listFbQueue(page.id)) {
+          if (readOnly && item.status === "failed") continue;
+          const d = new Date(item.scheduledAt * 1000);
+          add(eatYmd(d), {
+            time: eatTime(d),
+            platform: "fb",
+            kind:
+              item.status === "failed"
+                ? "failed"
+                : item.status === "publishing"
+                  ? "publishing"
+                  : "scheduled",
+            label: item.caption || "(no caption)",
+            href: readOnly
+              ? `/posts/${item.$id}?source=fb-queue`
+              : "/scheduled",
+          });
+        }
       }
 
       // Instagram — optional, never blocks the FB calendar

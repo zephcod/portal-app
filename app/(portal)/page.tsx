@@ -27,7 +27,8 @@ import {
   rangeToDates,
   type Company,
 } from "@/lib/domain";
-import { igQueueConfigured } from "@/lib/env";
+import { fbQueueConfigured, igQueueConfigured } from "@/lib/env";
+import { listFbQueue } from "@/lib/fbqueue";
 import {
   listPublishedPosts,
   listScheduledPosts,
@@ -163,6 +164,7 @@ async function OverviewBody({
   let followersAvailable = false;
   let upcoming: {
     key: string;
+    postId: string;
     href: string;
     when: number;
     platform: "fb" | "ig";
@@ -284,6 +286,16 @@ async function OverviewBody({
           // queue unreachable — FB upcoming content still shown
         }
       }
+      let fbQueueItems: Awaited<ReturnType<typeof listFbQueue>> = [];
+      if (fbQueueConfigured()) {
+        try {
+          fbQueueItems = (await listFbQueue(page.id)).filter(
+            (i) => i.status === "pending" || i.status === "publishing"
+          );
+        } catch {
+          // queue unreachable — FB upcoming content still shown
+        }
+      }
 
       // ── Page views: Facebook "page_views_total" + Instagram "profile_views"
       // — Instagram's closest equivalent to Meta's now-retired page-level
@@ -328,17 +340,29 @@ async function OverviewBody({
       followersDelta = pctChange(followersNet, followersPrevNet);
       followersAvailable = fbFollows !== null || igFollowerAdds !== null;
 
-      // ── Upcoming content (top 3) ──
+      // ── Upcoming content (top 3) ── FB scheduling now runs through
+      // fb_queue (Appwrite), not Facebook's own scheduler — fbScheduled
+      // only surfaces posts scheduled before that migration.
       upcoming = [
         ...fbScheduled.map((p) => ({
           key: `fb-${p.id}`,
+          postId: p.id,
           href: `/posts/${p.id}?source=fb-scheduled`,
           when: p.scheduled_publish_time,
           platform: "fb" as const,
           label: p.message || "(photo post)",
         })),
+        ...fbQueueItems.map((item) => ({
+          key: `fbq-${item.$id}`,
+          postId: item.$id,
+          href: `/posts/${item.$id}?source=fb-queue`,
+          when: item.scheduledAt,
+          platform: "fb" as const,
+          label: item.caption || "(no caption)",
+        })),
         ...igQueueItems.map((i) => ({
           key: `ig-${i.$id}`,
+          postId: i.$id,
           href: `/posts/${i.$id}?source=ig-queue`,
           when: i.scheduledAt,
           platform: "ig" as const,
@@ -349,7 +373,7 @@ async function OverviewBody({
       // Client hasn't signed off (no "approved" comment) on an upcoming post yet.
       const reviewChecks = await Promise.all(
         upcoming.map(async (u) => {
-          const comments = await getPostComments(session.cid, u.key.replace(/^(fb|ig)-/, ""));
+          const comments = await getPostComments(session.cid, u.postId);
           return comments.some((c) => c.status === "approved");
         })
       );
@@ -377,7 +401,7 @@ async function OverviewBody({
           unavailable={
             !organicError && !pageViewsAvailable ? "Not reported by Meta for this page" : undefined
           }
-          tip="Meta retired page-level reach for most Pages — this is the closest metric it still reports: profile/page visits across Facebook and Instagram, combined."
+          tip="Profile/page visits across Facebook and Instagram combined. This mertic shows the most intent."
         />
         <StatTile
           label="Engagement"
@@ -394,7 +418,7 @@ async function OverviewBody({
           unavailable={
             !organicError && !followersAvailable ? "Not reported by Meta for this page" : undefined
           }
-          tip="Net new followers this period — new follows minus unfollows, across Facebook and Instagram."
+          tip="Net new followers this period. New follows minus unfollows, across Facebook and Instagram."
         />
         <StatTile label="Ad leads" value={num(adTotals.leads)} delta={leadsDelta} periodLabel={periodLabel} />
       </section>

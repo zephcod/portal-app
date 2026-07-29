@@ -17,9 +17,13 @@ export type IgQueueItem = {
   igUserId: string;
   igUsername?: string;
   caption: string;
+  /** First media ref (kept for schema compat; see mediaRefs). */
   fbPhotoId: string;
   mediaType?: IgMediaType;
+  /** JSON array of Appwrite file ids: photo(s) for image/carousel, video for reel. */
   mediaRefs?: string;
+  /** Appwrite file id of a custom Reel cover image, if one was provided. */
+  thumbRef?: string;
   scheduledAt: number; // unix seconds
   status: "pending" | "publishing" | "published" | "failed";
   error?: string;

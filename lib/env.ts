@@ -45,3 +45,13 @@ export function igQueueConfigured(): boolean {
       process.env.APPWRITE_DATABASE_ID
   );
 }
+
+/** FB queue shares the Appwrite database, which the portal requires anyway. */
+export function fbQueueConfigured(): boolean {
+  return Boolean(
+    process.env.APPWRITE_ENDPOINT &&
+      process.env.APPWRITE_PROJECT_ID &&
+      process.env.APPWRITE_API_KEY &&
+      process.env.APPWRITE_DATABASE_ID
+  );
+}

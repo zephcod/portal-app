@@ -6,10 +6,12 @@ import { PlatformIcon } from "@/components/PlatformIcon";
 import SubmitButton from "@/components/SubmitButton";
 import { getClientPage } from "@/lib/clientpage";
 import { getPostComments } from "@/lib/data";
+import { getFbQueueItem } from "@/lib/fbqueue";
 import { getPublishedPost, getScheduledPost } from "@/lib/facebook";
 import { fmtDateTime, relativeFromNow } from "@/lib/format";
 import { getIgQueueItem } from "@/lib/igqueue";
 import { getIgMedia } from "@/lib/instagram";
+import { mediaUrl } from "@/lib/storage";
 import { submitPostComment } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +19,17 @@ export const dynamic = "force-dynamic";
 const inputCls =
   "w-full rounded-md border border-edge bg-input px-3 py-2 text-sm text-fg focus:border-gold focus:outline-none";
 
-type Source = "fb-scheduled" | "fb-published" | "ig-queue" | "ig-published";
+type Source =
+  | "fb-scheduled"
+  | "fb-queue"
+  | "fb-published"
+  | "ig-queue"
+  | "ig-published";
 
 function isSource(v: string | undefined): v is Source {
   return (
     v === "fb-scheduled" ||
+    v === "fb-queue" ||
     v === "fb-published" ||
     v === "ig-queue" ||
     v === "ig-published"
@@ -82,6 +90,27 @@ export default async function PostDetailPage({
       comments: post.comments?.summary?.total_count ?? 0,
       shares: post.shares?.count ?? 0,
     };
+  } else if (source === "fb-queue") {
+    const item = await getFbQueueItem(ctx.page.id, id);
+    if (!item || (item.status !== "pending" && item.status !== "publishing")) {
+      notFound();
+    }
+    platform = "fb";
+    platformName = "Facebook";
+    statusLabel = item.status === "publishing" ? "Publishing" : "Scheduled";
+    when = item.scheduledAt;
+    text = item.caption ?? "";
+    placeholder = "(no caption)";
+    if (item.mediaType === "image" || item.mediaType === "multiImage") {
+      const refs: string[] = item.mediaRefs ? JSON.parse(item.mediaRefs) : [];
+      image = refs[0] ? mediaUrl(refs[0]) : undefined;
+    }
+    badge =
+      item.mediaType === "multiImage"
+        ? "multi-photo"
+        : item.mediaType === "video"
+          ? "video"
+          : undefined;
   } else if (source === "ig-queue") {
     const item = await getIgQueueItem(ctx.page.id, id);
     if (!item || (item.status !== "pending" && item.status !== "publishing")) {
@@ -93,6 +122,14 @@ export default async function PostDetailPage({
     when = item.scheduledAt;
     text = item.caption ?? "";
     placeholder = "(image post)";
+    {
+      const refs: string[] = item.mediaRefs ? JSON.parse(item.mediaRefs) : [];
+      if ((item.mediaType ?? "image") === "reel") {
+        image = item.thumbRef ? mediaUrl(item.thumbRef) : undefined;
+      } else {
+        image = refs[0] ? mediaUrl(refs[0]) : undefined;
+      }
+    }
     badge =
       item.mediaType === "carousel"
         ? "carousel"

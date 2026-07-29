@@ -45,20 +45,24 @@ export async function getIgAccount(page: PageAuth): Promise<IgAccount | null> {
   return res.instagram_business_account ?? null;
 }
 
-/** Recent IG media with engagement counts. */
+/** Recent IG media with engagement counts; empty on failure — never blocks the rest of a page. */
 export async function listIgMedia(
   page: PageAuth,
   igUserId: string,
   limit = 12
 ): Promise<IgMedia[]> {
-  const res = await graph<{ data: IgMedia[] }>(page.token, `${igUserId}/media`, {
-    params: {
-      fields:
-        "id,caption,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count",
-      limit: String(limit),
-    },
-  });
-  return res.data ?? [];
+  try {
+    const res = await graph<{ data: IgMedia[] }>(page.token, `${igUserId}/media`, {
+      params: {
+        fields:
+          "id,caption,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count",
+        limit: String(limit),
+      },
+    });
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 /** Single media item by id, or null if it doesn't exist / isn't visible to this page token. */

@@ -202,40 +202,61 @@ export default async function InsightsView({
         }
       }
 
-      // Instagram — optional
+      // Instagram — optional. Media (top posts) and metrics (reach,
+      // followers) are fetched and caught independently: they used to
+      // share one Promise.all, so a hiccup on either side (a metric
+      // Meta has throttled, a transient rate limit) silently discarded
+      // BOTH — including posts that had already fetched successfully.
       let igPostsWeekBefore = 0;
       try {
         const ig = await getIgAccount(page);
         if (ig) {
           igUsername = ig.username ?? "";
-          const [stats, reach, reachPrev, followerAdds, media] = await Promise.all([
-            igAccountStats(page, ig.id),
-            igMetricSeries(page, ig.id, "reach", `IG reach (${days}d)`, since, until),
-            igMetricSeries(page, ig.id, "reach", `IG reach (prior)`, prevSince, prevUntil),
-            igMetricSeries(page, ig.id, "follower_count", `New IG followers (${days}d)`, since, until),
-            listIgMedia(page, ig.id, 25),
-          ]);
-          igFollowers = stats?.followers_count;
-          igReach = reach;
-          igReachDelta = reach ? pctChange(reach.total, reachPrev?.total ?? 0) : null;
-          if (reach) igCharts.push(reach);
-          if (followerAdds) igCharts.push(followerAdds);
-          topIg = [...media]
-            .sort((a, b) => igEngagement(b) - igEngagement(a))
-            .slice(0, 5);
-          const weekAgoIgMs = Date.now() - 7 * 86400 * 1000;
-          const twoWeeksAgoIgMs = Date.now() - 14 * 86400 * 1000;
-          postsLastWeek += media.filter(
-            (m) => m.timestamp && new Date(m.timestamp).getTime() >= weekAgoIgMs
-          ).length;
-          igPostsWeekBefore = media.filter((m) => {
-            if (!m.timestamp) return false;
-            const t = new Date(m.timestamp).getTime();
-            return t >= twoWeeksAgoIgMs && t < weekAgoIgMs;
-          }).length;
+
+          try {
+            const media = await listIgMedia(page, ig.id, 25);
+            topIg = [...media]
+              .sort((a, b) => igEngagement(b) - igEngagement(a))
+              .slice(0, 5);
+            const weekAgoIgMs = Date.now() - 7 * 86400 * 1000;
+            const twoWeeksAgoIgMs = Date.now() - 14 * 86400 * 1000;
+            postsLastWeek += media.filter(
+              (m) => m.timestamp && new Date(m.timestamp).getTime() >= weekAgoIgMs
+            ).length;
+            igPostsWeekBefore = media.filter((m) => {
+              if (!m.timestamp) return false;
+              const t = new Date(m.timestamp).getTime();
+              return t >= twoWeeksAgoIgMs && t < weekAgoIgMs;
+            }).length;
+          } catch {
+            // Top posts unavailable — metrics below still render.
+          }
+
+          try {
+            const [stats, reach, reachPrev, followerAdds] = await Promise.all([
+              igAccountStats(page, ig.id),
+              igMetricSeries(page, ig.id, "reach", `IG reach (${days}d)`, since, until),
+              igMetricSeries(page, ig.id, "reach", `IG reach (prior)`, prevSince, prevUntil),
+              igMetricSeries(
+                page,
+                ig.id,
+                "follower_count",
+                `New IG followers (${days}d)`,
+                since,
+                until
+              ),
+            ]);
+            igFollowers = stats?.followers_count;
+            igReach = reach;
+            igReachDelta = reach ? pctChange(reach.total, reachPrev?.total ?? 0) : null;
+            if (reach) igCharts.push(reach);
+            if (followerAdds) igCharts.push(followerAdds);
+          } catch {
+            // Metrics unavailable — top posts above still render.
+          }
         }
       } catch {
-        // IG section optional
+        // No IG account resolvable at all — rest of the page still renders.
       }
       postsLastWeekDelta = pctChange(postsLastWeek, fbPostsWeekBefore + igPostsWeekBefore);
     } catch (e) {
