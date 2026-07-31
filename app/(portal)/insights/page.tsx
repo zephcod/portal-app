@@ -1,21 +1,27 @@
 import { Suspense } from "react";
+import { RangeSelect } from "@/components/RangeSelect";
 import InsightsView from "@/components/InsightsView";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getClientPage } from "@/lib/clientpage";
+import { RANGE_PRESETS } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClientInsightsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ d?: string }>;
+  searchParams: Promise<{ range?: string }>;
 }) {
-  const { d } = await searchParams;
-  const days = d === "7" ? 7 : 28;
+  const { range } = await searchParams;
+  const rangeKey = range ?? "30d";
+  const days = RANGE_PRESETS.find((p) => p.key === rangeKey)?.days ?? 30;
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-bold">Organic Insights</h1>
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="font-display text-2xl font-bold">Organic Insights</h1>
+        <RangeSelect />
+      </header>
       <Suspense fallback={<InsightsBodySkeleton />}>
         <InsightsBody days={days} />
       </Suspense>
@@ -41,7 +47,6 @@ async function InsightsBody({ days }: { days: number }) {
               : "Your account isn't linked to a page yet — contact your Awaj ET account manager."
           }
           days={days}
-          basePath="/insights"
         />
       </div>
     </>
@@ -68,12 +73,7 @@ function InsightsBodySkeleton() {
       <Skeleton className="mt-1 h-4 w-80" />
 
       <div className="mt-4">
-        <div className="flex justify-end gap-2">
-          <Skeleton className="h-8 w-20 rounded-full" />
-          <Skeleton className="h-8 w-20 rounded-full" />
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
             <div
               key={i}

@@ -519,27 +519,27 @@ async function OverviewBody({
         </div>
       </section>
 
-      <section className="mt-8 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
+      <section className="mt-8 grid min-w-0 gap-4 lg:grid-cols-2">
+        <div className="min-w-0 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
           <h2 className="font-display mb-4 text-lg font-semibold">Upcoming content</h2>
           {upcoming.length === 0 ? (
             <p className="text-sm text-muted">
               {organicError ?? "Nothing scheduled right now."}
             </p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="flex min-w-0 flex-col gap-2">
               {upcoming.slice(0, 3).map((u) => (
-                <li key={u.key}>
+                <li key={u.key} className="min-w-0">
                   <Link
                     href={u.href}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 -mx-2 text-sm transition-colors hover:bg-app"
+                    className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 -mx-2 text-sm transition-colors hover:bg-app"
                   >
                     <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
-                    <span className="font-mono text-xs text-muted">
+                    <span className="shrink-0 font-mono text-xs text-muted">
                       {fmtDateTime(u.when).slice(0, 6)}
                     </span>
                     <PlatformIcon platform={u.platform} />
-                    <span className="truncate">{u.label}</span>
+                    <span className="min-w-0 flex-1 truncate">{u.label}</span>
                   </Link>
                 </li>
               ))}
@@ -551,50 +551,58 @@ async function OverviewBody({
           </Link>
         </div>
 
-        <div className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
+        <div className="min-w-0 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
           <h2 className="font-display mb-4 text-lg font-semibold">Attention needed</h2>
-          <ul className="flex flex-col gap-3 text-sm">
-            <li>
-              <Link href="/issues" className="flex items-center gap-2 hover:underline">
+          <ul className="flex min-w-0 flex-col gap-3 text-sm">
+            <li className="min-w-0">
+              <Link href="/issues" className="flex min-w-0 items-center gap-2 hover:underline">
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${openIssues.length > 0 ? "bg-red-500" : "bg-green-500"}`}
                   aria-hidden
                 />
-                {openIssues.length > 0
-                  ? `${openIssues.length} open support request${openIssues.length === 1 ? "" : "s"}`
-                  : "No open support requests"}
+                <span className="min-w-0 flex-1 truncate">
+                  {openIssues.length > 0
+                    ? `${openIssues.length} open support request${openIssues.length === 1 ? "" : "s"}`
+                    : "No open support requests"}
+                </span>
               </Link>
             </li>
-            <li>
-              <Link href="/calendar" className="flex items-center gap-2 hover:underline">
+            <li className="min-w-0">
+              <Link href="/calendar" className="flex min-w-0 items-center gap-2 hover:underline">
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${awaitingReview > 0 ? "bg-gold" : "bg-green-500"}`}
                   aria-hidden
                 />
-                {awaitingReview > 0
-                  ? `${awaitingReview} post${awaitingReview === 1 ? "" : "s"} awaiting your review`
-                  : "All posts reviewed"}
+                <span className="min-w-0 flex-1 truncate">
+                  {awaitingReview > 0
+                    ? `${awaitingReview} post${awaitingReview === 1 ? "" : "s"} awaiting your review`
+                    : "All posts reviewed"}
+                </span>
               </Link>
             </li>
-            <li>
-              <Link href="/advertising" className="flex items-center gap-2 hover:underline">
+            <li className="min-w-0">
+              <Link href="/advertising" className="flex min-w-0 items-center gap-2 hover:underline">
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${activeCampaign ? "bg-green-500" : "bg-gold"}`}
                   aria-hidden
                 />
-                {activeCampaign ? "Campaign running" : "No active campaign"}
+                <span className="min-w-0 flex-1 truncate">
+                  {activeCampaign ? "Campaign running" : "No active campaign"}
+                </span>
               </Link>
             </li>
             {!organicError && (
-              <li>
-                <Link href="/calendar" className="flex items-center gap-2 hover:underline">
+              <li className="min-w-0">
+                <Link href="/calendar" className="flex min-w-0 items-center gap-2 hover:underline">
                   <span
                     className={`h-2.5 w-2.5 shrink-0 rounded-full ${postsLastWeekCount === 0 ? "bg-red-500" : "bg-green-500"}`}
                     aria-hidden
                   />
-                  {postsLastWeekCount === 0
-                    ? "No posts in the last 7 days"
-                    : `${postsLastWeekCount} post${postsLastWeekCount === 1 ? "" : "s"} in the last 7 days`}
+                  <span className="min-w-0 flex-1 truncate">
+                    {postsLastWeekCount === 0
+                      ? "No posts in the last 7 days"
+                      : `${postsLastWeekCount} post${postsLastWeekCount === 1 ? "" : "s"} in the last 7 days`}
+                  </span>
                 </Link>
               </li>
             )}

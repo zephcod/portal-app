@@ -1,5 +1,4 @@
 import { Heart, MessageCircle, Repeat2 } from "lucide-react";
-import Link from "next/link";
 import { InfoTip } from "@/components/InfoTip";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { pctChange } from "@/lib/domain";
@@ -117,12 +116,10 @@ export default async function InsightsView({
   page,
   error: externalError,
   days,
-  basePath,
 }: {
   page: ManagedPage | null;
   error?: string | null;
   days: number;
-  basePath: string;
 }) {
   const until = Math.floor(Date.now() / 1000);
   const since = until - days * 86400;
@@ -266,22 +263,6 @@ export default async function InsightsView({
 
   return (
     <div>
-      <div className="flex justify-end gap-2">
-        {[7, 28].map((n) => (
-          <Link
-            key={n}
-            href={`${basePath}?d=${n}`}
-            className={`rounded-full px-4 py-1.5 text-xs font-semibold ${
-              days === n
-                ? "bg-navy text-gold"
-                : "border border-edge text-muted hover:text-fg"
-            }`}
-          >
-            {n} days
-          </Link>
-        ))}
-      </div>
-
       {error && (
         <p className="mt-6 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
           {error}
