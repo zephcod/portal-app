@@ -1,12 +1,17 @@
 import { AwajMark } from "@/components/icons/AwajMark";
 import LoginForm from "@/components/LoginForm";
+import { SuspendedNotice } from "@/components/SuspendedNotice";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; suspended?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, suspended } = await searchParams;
+
+  if (suspended) {
+    return <SuspendedNotice />;
+  }
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-navy">

@@ -31,11 +31,15 @@ function db(): Databases {
   return _db;
 }
 
-/** Active company matching this PIN, or null. */
+/**
+ * Company matching this PIN, active or not — the caller decides what to
+ * do with a suspended (inactive) match (see app/login/actions.ts, which
+ * shows a "contact your account manager" screen instead of logging in).
+ * Null when no company has this PIN at all.
+ */
 export async function getCompanyByPin(pin: string): Promise<Company | null> {
   const res = await db().listDocuments(env.appwriteDatabaseId(), COMPANIES, [
     Query.equal("pin", pin),
-    Query.equal("active", true),
     Query.limit(1),
   ]);
   return (res.documents[0] as unknown as Company) ?? null;

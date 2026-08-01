@@ -1,6 +1,7 @@
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
+import { CalendarMonthNav } from "@/components/CalendarMonthNav";
 import { KIND_STYLE, fmtDayLabel, type CalEvent } from "@/components/CalendarShared";
 import { DayMorePopover } from "@/components/DayMorePopover";
 import { PlatformIcon } from "@/components/PlatformIcon";
@@ -153,33 +154,13 @@ export default async function CalendarView({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Link
-          href={`${basePath}?m=${prev}`}
-          aria-label="Previous month"
-          className="flex items-center rounded-md border border-edge bg-card px-2.5 py-1.5 hover:border-gold"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Link>
-        <span className="min-w-36 text-center font-display text-sm font-semibold">
-          {monthLabel}
-        </span>
-        <Link
-          href={`${basePath}?m=${next}`}
-          aria-label="Next month"
-          className="flex items-center rounded-md border border-edge bg-card px-2.5 py-1.5 hover:border-gold"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Link>
-        {monthKey !== todayYmd.slice(0, 7) && (
-          <Link
-            href={basePath}
-            className="rounded-md border border-edge bg-card px-3 py-1.5 font-mono text-[11px] text-muted hover:border-gold"
-          >
-            Today
-          </Link>
-        )}
-      </div>
+      <CalendarMonthNav
+        basePath={basePath}
+        prevMonth={prev}
+        nextMonth={next}
+        monthLabel={monthLabel}
+        showToday={monthKey !== todayYmd.slice(0, 7)}
+      />
 
       {error && (
         <p className="mt-6 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">

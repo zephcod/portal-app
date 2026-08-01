@@ -15,6 +15,12 @@ export async function login(formData: FormData) {
 
   if (/^\d{4,10}$/.test(pin)) {
     const company = await getCompanyByPin(pin);
+    if (company && !company.active) {
+      // Correct PIN, suspended account — no session is issued; the
+      // login page shows a blurred dashboard + "contact your account
+      // manager" notice instead of the form.
+      redirect("/login?suspended=1");
+    }
     if (company) {
       const token = await createClientToken(
         company.$id,
