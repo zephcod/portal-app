@@ -14,9 +14,11 @@ import {
   getCompany,
   getInsights,
   getIssues,
+  getOrganicStats,
   getPostComments,
 } from "@/lib/data";
 import {
+  addDaysYmd,
   computeTotals,
   DEFAULT_CURRENCY_MULTIPLIER,
   money,
@@ -25,7 +27,9 @@ import {
   previousRange,
   RANGE_PRESETS,
   rangeToDates,
+  yesterdayYmd,
   type Company,
+  type OrganicStatsDaily,
 } from "@/lib/domain";
 import { fbQueueConfigured, igQueueConfigured } from "@/lib/env";
 import { listFbQueue } from "@/lib/fbqueue";
@@ -36,8 +40,6 @@ import {
 } from "@/lib/facebook";
 import { fmtDateTime } from "@/lib/format";
 import { listIgQueue } from "@/lib/igqueue";
-import { getIgAccount, listIgMedia, type IgMedia } from "@/lib/instagram";
-import { fbMetricSeries, igMetricSeries, type MetricSeries } from "@/lib/insights";
 import { getSession } from "@/lib/server-session";
 import type { ClientSession } from "@/lib/clientsession";
 
@@ -56,28 +58,16 @@ const fbEngagement = (p: PublishedPost) =>
   (p.comments?.summary?.total_count ?? 0) +
   (p.shares?.count ?? 0);
 
-const igEngagement = (m: IgMedia) => (m.like_count ?? 0) + (m.comments_count ?? 0);
-
-const unixOf = (ymd: string, endOfDay = false) =>
-  Math.floor(new Date(`${ymd}T${endOfDay ? "23:59:59" : "00:00:00"}Z`).getTime() / 1000);
-
-/** Sum two daily series by date (union of both sets of dates), sorted ascending. */
-function sumSeries(a: SeriesPoint[], b: SeriesPoint[]): SeriesPoint[] {
-  const byDate = new Map<string, number>();
-  for (const p of a) byDate.set(p.date, (byDate.get(p.date) ?? 0) + p.value);
-  for (const p of b) byDate.set(p.date, (byDate.get(p.date) ?? 0) + p.value);
-  return [...byDate.entries()]
-    .map(([date, value]) => ({ date, value }))
-    .sort((x, y) => x.date.localeCompare(y.date));
-}
-
-/** Fold per-item {date, value} entries (e.g. one per IG post) into one point per day. */
-function bucketByDay(items: { date: string; value: number }[]): SeriesPoint[] {
-  const byDate = new Map<string, number>();
-  for (const it of items) byDate.set(it.date, (byDate.get(it.date) ?? 0) + it.value);
-  return [...byDate.entries()]
-    .map(([date, value]) => ({ date, value }))
-    .sort((x, y) => x.date.localeCompare(y.date));
+/** Sum a window of cached daily rows into range totals. */
+function sumOrganicRows(rows: OrganicStatsDaily[]) {
+  return rows.reduce(
+    (acc, r) => ({
+      pageViews: acc.pageViews + r.fbPageViews + r.igProfileViews,
+      engagement: acc.engagement + r.fbEngagement + r.igEngagement,
+      followersNet: acc.followersNet + (r.fbFollows - r.fbUnfollows) + r.igFollowerAdds,
+    }),
+    { pageViews: 0, engagement: 0, followersNet: 0 }
+  );
 }
 
 export default async function OverviewPage({
@@ -155,13 +145,12 @@ async function OverviewBody({
   let pageViewsTotal = 0;
   let pageViewsDelta: number | null = null;
   let pageViewsPoints: SeriesPoint[] = [];
-  let pageViewsAvailable = false;
   let engagementTotal = 0;
   let engagementDelta: number | null = null;
   let engagementPoints: SeriesPoint[] = [];
   let followersNet = 0;
   let followersDelta: number | null = null;
-  let followersAvailable = false;
+  let statsNotSynced = false;
   let upcoming: {
     key: string;
     postId: string;
@@ -181,102 +170,25 @@ async function OverviewBody({
     organicError =
       "Your account isn't linked to a page yet — contact your Awaj ET account manager.";
   } else {
-    // Everything here is best-effort — any single Graph API hiccup (a
-    // permission scope gap, a deprecated metric) degrades to the "not
-    // linked" message rather than crashing the whole dashboard.
+    // Stats come from the nightly organic-stats sync (Appwrite), not live
+    // Meta calls — see the scheduler app's lib/organicStats.ts. It only
+    // ever covers through yesterday, so the query window is clipped
+    // accordingly; "today" simply has no row yet.
     try {
       const { page } = ctx;
-      const [sinceUnix, untilUnix, prevSinceUnix, prevUntilUnix] = [
-        unixOf(since),
-        unixOf(until, true),
-        unixOf(prev.since),
-        unixOf(prev.until, true),
-      ];
+      const cappedUntil = until < yesterdayYmd() ? until : yesterdayYmd();
+      const cappedPrevUntil = prev.until < yesterdayYmd() ? prev.until : yesterdayYmd();
 
-      // Meta deprecated page-level reach/impressions metrics entirely
-      // ("page_impressions_unique", "page_impressions" et al. now error as
-      // invalid metric names across every page on this API version) —
-      // "page_views_total" (profile views of the Page) is the closest
-      // still-live substitute, so the tile is labeled "Page views" rather
-      // than "Reach" to stay honest about what it measures.
-      // Followers similarly lost "page_fan_adds"; the still-live
-      // replacement is follows-minus-unfollows per day.
-      const [
-        fbEng,
-        fbEngPrev,
-        fbPageViews,
-        fbPageViewsPrev,
-        fbFollows,
-        fbFollowsPrev,
-        fbUnfollows,
-        fbUnfollowsPrev,
-        ig,
-        fbScheduled,
-        published,
-      ] = await Promise.all([
-        fbMetricSeries(page, "page_post_engagements", "Engagement", sinceUnix, untilUnix),
-        fbMetricSeries(page, "page_post_engagements", "Engagement", prevSinceUnix, prevUntilUnix),
-        fbMetricSeries(page, "page_views_total", "Page views", sinceUnix, untilUnix),
-        fbMetricSeries(page, "page_views_total", "Page views", prevSinceUnix, prevUntilUnix),
-        fbMetricSeries(page, "page_daily_follows_unique", "New follows", sinceUnix, untilUnix),
-        fbMetricSeries(
-          page,
-          "page_daily_follows_unique",
-          "New follows",
-          prevSinceUnix,
-          prevUntilUnix
-        ),
-        fbMetricSeries(page, "page_daily_unfollows_unique", "Unfollows", sinceUnix, untilUnix),
-        fbMetricSeries(
-          page,
-          "page_daily_unfollows_unique",
-          "Unfollows",
-          prevSinceUnix,
-          prevUntilUnix
-        ),
-        getIgAccount(page),
+      const [curRows, prevRows, fbScheduled, published] = await Promise.all([
+        since <= cappedUntil ? getOrganicStats(session.cid, since, cappedUntil) : Promise.resolve([]),
+        prev.since <= cappedPrevUntil
+          ? getOrganicStats(session.cid, prev.since, cappedPrevUntil)
+          : Promise.resolve([]),
         listScheduledPosts(page),
         listPublishedPosts(page),
       ]);
 
-      let igFollowerAdds: MetricSeries | null = null;
-      let igFollowerAddsPrev: MetricSeries | null = null;
-      let igMedia: IgMedia[] = [];
       let igQueueItems: Awaited<ReturnType<typeof listIgQueue>> = [];
-      // "profile_views" is Instagram's closest equivalent to Facebook's
-      // "page_views_total" — combined below so the Page views tile
-      // reflects visits across both platforms, not Facebook alone.
-      let igProfileViews: MetricSeries | null = null;
-      let igProfileViewsPrev: MetricSeries | null = null;
-
-      if (ig) {
-        try {
-          [igFollowerAdds, igFollowerAddsPrev, igMedia, igProfileViews, igProfileViewsPrev] =
-            await Promise.all([
-              igMetricSeries(page, ig.id, "follower_count", "IG followers", sinceUnix, untilUnix),
-              igMetricSeries(
-                page,
-                ig.id,
-                "follower_count",
-                "IG followers",
-                prevSinceUnix,
-                prevUntilUnix
-              ),
-              listIgMedia(page, ig.id, 25),
-              igMetricSeries(page, ig.id, "profile_views", "Profile views", sinceUnix, untilUnix),
-              igMetricSeries(
-                page,
-                ig.id,
-                "profile_views",
-                "Profile views",
-                prevSinceUnix,
-                prevUntilUnix
-              ),
-            ]);
-        } catch {
-          // IG section is optional — FB-only data still renders.
-        }
-      }
       if (igQueueConfigured()) {
         try {
           igQueueItems = (await listIgQueue(page.id)).filter(
@@ -297,48 +209,19 @@ async function OverviewBody({
         }
       }
 
-      // ── Page views: Facebook "page_views_total" + Instagram "profile_views"
-      // — Instagram's closest equivalent to Meta's now-retired page-level
-      // reach metrics — summed per day so both the headline number and the
-      // chart reflect visits across every connected platform. ──
-      pageViewsPoints = sumSeries(fbPageViews?.points ?? [], igProfileViews?.points ?? []);
-      pageViewsTotal = (fbPageViews?.total ?? 0) + (igProfileViews?.total ?? 0);
-      const pageViewsPrevTotal = (fbPageViewsPrev?.total ?? 0) + (igProfileViewsPrev?.total ?? 0);
-      pageViewsDelta = pctChange(pageViewsTotal, pageViewsPrevTotal);
-      pageViewsAvailable = fbPageViews !== null || igProfileViews !== null;
+      statsNotSynced = curRows.length === 0;
 
-      // ── Engagement: Facebook's native daily series + Instagram's
-      // per-post engagement bucketed into the same daily buckets (IG has
-      // no daily engagement metric, only per-post totals) — combined per
-      // day so the chart matches the "all platforms" headline number. ──
-      const igEngagementByDay = bucketByDay(
-        igMedia
-          .filter(
-            (m) => m.timestamp && m.timestamp.slice(0, 10) >= since && m.timestamp.slice(0, 10) <= until
-          )
-          .map((m) => ({ date: m.timestamp!.slice(0, 10), value: igEngagement(m) }))
-      );
-      engagementPoints = sumSeries(fbEng?.points ?? [], igEngagementByDay);
-      const igEngagementInRange = igEngagementByDay.reduce((n, p) => n + p.value, 0);
-      const igEngagementPrevRange = igMedia
-        .filter(
-          (m) =>
-            m.timestamp &&
-            m.timestamp.slice(0, 10) >= prev.since &&
-            m.timestamp.slice(0, 10) <= prev.until
-        )
-        .reduce((n, m) => n + igEngagement(m), 0);
-      engagementTotal = (fbEng?.total ?? 0) + igEngagementInRange;
-      const engagementPrevTotal = (fbEngPrev?.total ?? 0) + igEngagementPrevRange;
-      engagementDelta = pctChange(engagementTotal, engagementPrevTotal);
+      pageViewsPoints = curRows.map((r) => ({ date: r.date, value: r.fbPageViews + r.igProfileViews }));
+      engagementPoints = curRows.map((r) => ({ date: r.date, value: r.fbEngagement + r.igEngagement }));
 
-      // ── Followers: net new adds this period vs prior period ──
-      const fbFollowersNet = (fbFollows?.total ?? 0) - (fbUnfollows?.total ?? 0);
-      const fbFollowersPrevNet = (fbFollowsPrev?.total ?? 0) - (fbUnfollowsPrev?.total ?? 0);
-      followersNet = fbFollowersNet + (igFollowerAdds?.total ?? 0);
-      const followersPrevNet = fbFollowersPrevNet + (igFollowerAddsPrev?.total ?? 0);
-      followersDelta = pctChange(followersNet, followersPrevNet);
-      followersAvailable = fbFollows !== null || igFollowerAdds !== null;
+      const curTotals = sumOrganicRows(curRows);
+      const prevTotals = sumOrganicRows(prevRows);
+      pageViewsTotal = curTotals.pageViews;
+      pageViewsDelta = pctChange(curTotals.pageViews, prevTotals.pageViews);
+      engagementTotal = curTotals.engagement;
+      engagementDelta = pctChange(curTotals.engagement, prevTotals.engagement);
+      followersNet = curTotals.followersNet;
+      followersDelta = pctChange(curTotals.followersNet, prevTotals.followersNet);
 
       // ── Upcoming content (top 3) ── FB scheduling now runs through
       // fb_queue (Appwrite), not Facebook's own scheduler — fbScheduled
@@ -381,10 +264,13 @@ async function OverviewBody({
 
       topPosts = [...published].sort((a, b) => fbEngagement(b) - fbEngagement(a)).slice(0, 3);
 
-      const weekAgoMs = Date.now() - 7 * 86400 * 1000;
-      postsLastWeekCount =
-        published.filter((p) => new Date(p.created_time).getTime() >= weekAgoMs).length +
-        igMedia.filter((m) => m.timestamp && new Date(m.timestamp).getTime() >= weekAgoMs).length;
+      // Cadence: real trailing-7-days-through-yesterday, independent of
+      // the selected range — always a subset of curRows since every
+      // range preset spans at least 7 days.
+      const weekAgoDate = addDaysYmd(cappedUntil, -6);
+      postsLastWeekCount = curRows
+        .filter((r) => r.date >= weekAgoDate)
+        .reduce((n, r) => n + r.postsPublishedCount, 0);
     } catch (e) {
       organicError = e instanceof Error ? e.message : "Could not load your social data.";
     }
@@ -398,9 +284,7 @@ async function OverviewBody({
           value={num(pageViewsTotal)}
           delta={pageViewsDelta}
           periodLabel={periodLabel}
-          unavailable={
-            !organicError && !pageViewsAvailable ? "Not reported by Meta for this page" : undefined
-          }
+          unavailable={!organicError && statsNotSynced ? "Not synced yet" : undefined}
           tip="Profile/page visits across Facebook and Instagram combined. This mertic shows the most intent."
         />
         <StatTile
@@ -415,9 +299,7 @@ async function OverviewBody({
           value={`${followersNet >= 0 ? "+" : ""}${num(followersNet)}`}
           delta={followersDelta}
           periodLabel={periodLabel}
-          unavailable={
-            !organicError && !followersAvailable ? "Not reported by Meta for this page" : undefined
-          }
+          unavailable={!organicError && statsNotSynced ? "Not synced yet" : undefined}
           tip="Net new followers this period. New follows minus unfollows, across Facebook and Instagram."
         />
         <StatTile label="Ad leads" value={num(adTotals.leads)} delta={leadsDelta} periodLabel={periodLabel} />

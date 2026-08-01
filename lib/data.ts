@@ -7,6 +7,7 @@ import type {
   InsightDaily,
   Issue,
   IssueStatus,
+  OrganicStatsDaily,
 } from "./domain";
 
 // ── Companies ─────────────────────────────────────────────
@@ -167,6 +168,27 @@ export async function getInsights(
   until: string
 ): Promise<InsightDaily[]> {
   return listAll<InsightDaily>(COLLECTIONS.insights, [
+    Query.equal("companyId", companyId),
+    Query.greaterThanEqual("date", since),
+    Query.lessThanEqual("date", until),
+    Query.orderAsc("date"),
+  ]);
+}
+
+// ── Organic (Page + IG) daily stats — synced nightly by the scheduler ──
+
+/**
+ * Pre-aggregated organic stats for [since, until] (inclusive, YYYY-MM-DD).
+ * Only ever has rows through yesterday — the nightly sync doesn't cover
+ * "today" — so callers should clip `until` to yesterday themselves if
+ * they want to avoid a misleadingly empty tail.
+ */
+export async function getOrganicStats(
+  companyId: string,
+  since: string,
+  until: string
+): Promise<OrganicStatsDaily[]> {
+  return listAll<OrganicStatsDaily>(COLLECTIONS.organicStats, [
     Query.equal("companyId", companyId),
     Query.greaterThanEqual("date", since),
     Query.lessThanEqual("date", until),

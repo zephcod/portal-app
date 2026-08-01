@@ -1,7 +1,13 @@
 import { Heart, MessageCircle, Repeat2 } from "lucide-react";
 import { InfoTip } from "@/components/InfoTip";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { pctChange } from "@/lib/domain";
+import { getOrganicStats } from "@/lib/data";
+import {
+  addDaysYmd,
+  pctChange,
+  yesterdayYmd,
+  type OrganicStatsDaily,
+} from "@/lib/domain";
 import { igQueueConfigured } from "@/lib/env";
 import {
   listPublishedPosts,
@@ -9,14 +15,17 @@ import {
   type PublishedPost,
 } from "@/lib/facebook";
 import { listIgQueue } from "@/lib/igqueue";
-import {
-  fbMetricSeries,
-  igAccountStats,
-  igMetricSeries,
-  type MetricSeries,
-} from "@/lib/insights";
+import type { MetricSeries } from "@/lib/insights";
 import { getIgAccount, listIgMedia, type IgMedia } from "@/lib/instagram";
 import type { ManagedPage } from "@/lib/pages";
+
+type NumericStatKey =
+  | "fbPageViews"
+  | "fbEngagement"
+  | "fbVideoViews"
+  | "igReach"
+  | "igFollowerAdds"
+  | "postsPublishedCount";
 
 // ── Tiny server-rendered bar chart ──
 function BarChart({ series }: { series: MetricSeries }) {
@@ -109,25 +118,24 @@ const igEngagement = (m: IgMedia) =>
 /**
  * Insights dashboard for one page — stat cards, daily charts, top posts.
  * Server component shared by the team view (/insights) and the client
- * portal (/client/insights). Each metric is fetched independently and
- * silently skipped when Meta no longer serves it.
+ * portal (/client/insights). Stat cards/charts read pre-aggregated
+ * numbers from `organic_stats_daily` (nightly Meta sync — see the
+ * scheduler app's lib/organicStats.ts), never covering "today"; top
+ * posts and the scheduled-ahead count are content/real-time and still
+ * fetched live from Meta on every render.
  */
 export default async function InsightsView({
   page,
   error: externalError,
   days,
+  companyId,
 }: {
   page: ManagedPage | null;
   error?: string | null;
   days: number;
+  /** Needed to look up cached stats — omit to skip the stat cards/charts entirely. */
+  companyId?: string;
 }) {
-  const until = Math.floor(Date.now() / 1000);
-  const since = until - days * 86400;
-  // Immediately preceding window of equal length — the baseline every
-  // delta below compares against.
-  const prevUntil = since;
-  const prevSince = since - days * 86400;
-
   let error: string | null = externalError ?? null;
   let fanCount: number | undefined;
   let igFollowers: number | undefined;
@@ -148,45 +156,14 @@ export default async function InsightsView({
     try {
       fanCount = page.fanCount;
 
-      // FB metrics — fetched independently; failures skip silently.
-      // Meta deprecated page-level reach/impressions entirely
-      // ("page_impressions_unique"/"page_impressions" now error as invalid
-      // metric names) — "page_views_total" (profile views) is the closest
-      // still-live substitute, labeled "Page views" rather than "Reach".
-      const fbMetricDefs: [string, string][] = [
-        ["page_views_total", `Page views (${days}d)`],
-        ["page_post_engagements", `Post engagements (${days}d)`],
-        ["page_video_views", `Video views (${days}d)`],
-      ];
-      const [fbResults, fbPageViewsPrev] = await Promise.all([
-        Promise.all(fbMetricDefs.map(([m, t]) => fbMetricSeries(page, m, t, since, until))),
-        fbMetricSeries(page, "page_views_total", "Page views (prior)", prevSince, prevUntil),
-      ]);
-      fbCharts.push(...fbResults.filter((s): s is MetricSeries => s !== null));
-      fbPageViews = fbCharts.find((s) => s.metric === "page_views_total") ?? null;
-      fbPageViewsDelta = fbPageViews
-        ? pctChange(fbPageViews.total, fbPageViewsPrev?.total ?? 0)
-        : null;
-
-      // Top FB posts by engagement + posting-cadence counts. "Last week" /
-      // "the week before" are always trailing-7-days windows from now,
-      // independent of the 7d/28d chart toggle above — cadence is about a
-      // steady weekly rhythm, not whatever range is being charted.
-      const weekAgoMs = Date.now() - 7 * 86400 * 1000;
-      const twoWeeksAgoMs = Date.now() - 14 * 86400 * 1000;
+      // Top FB posts by engagement (content — stays live).
       const posts = await listPublishedPosts(page);
       topFb = [...posts]
         .sort((a, b) => fbEngagement(b) - fbEngagement(a))
         .slice(0, 5);
-      postsLastWeek += posts.filter(
-        (p) => new Date(p.created_time).getTime() >= weekAgoMs
-      ).length;
-      const fbPostsWeekBefore = posts.filter((p) => {
-        const t = new Date(p.created_time).getTime();
-        return t >= twoWeeksAgoMs && t < weekAgoMs;
-      }).length;
 
-      // Scheduled ahead: FB native queue + pending IG queue items
+      // Scheduled ahead: FB native queue + pending IG queue items — a
+      // real-time queue count, not a historical metric, so it stays live.
       const fbScheduled = await listScheduledPosts(page);
       scheduledAhead += fbScheduled.length;
       if (igQueueConfigured()) {
@@ -199,63 +176,81 @@ export default async function InsightsView({
         }
       }
 
-      // Instagram — optional. Media (top posts) and metrics (reach,
-      // followers) are fetched and caught independently: they used to
-      // share one Promise.all, so a hiccup on either side (a metric
-      // Meta has throttled, a transient rate limit) silently discarded
-      // BOTH — including posts that had already fetched successfully.
-      let igPostsWeekBefore = 0;
+      // Top IG posts (content — stays live); also the source of igUsername.
+      let igConnected = false;
       try {
         const ig = await getIgAccount(page);
         if (ig) {
+          igConnected = true;
           igUsername = ig.username ?? "";
-
           try {
             const media = await listIgMedia(page, ig.id, 25);
             topIg = [...media]
               .sort((a, b) => igEngagement(b) - igEngagement(a))
               .slice(0, 5);
-            const weekAgoIgMs = Date.now() - 7 * 86400 * 1000;
-            const twoWeeksAgoIgMs = Date.now() - 14 * 86400 * 1000;
-            postsLastWeek += media.filter(
-              (m) => m.timestamp && new Date(m.timestamp).getTime() >= weekAgoIgMs
-            ).length;
-            igPostsWeekBefore = media.filter((m) => {
-              if (!m.timestamp) return false;
-              const t = new Date(m.timestamp).getTime();
-              return t >= twoWeeksAgoIgMs && t < weekAgoIgMs;
-            }).length;
           } catch {
-            // Top posts unavailable — metrics below still render.
-          }
-
-          try {
-            const [stats, reach, reachPrev, followerAdds] = await Promise.all([
-              igAccountStats(page, ig.id),
-              igMetricSeries(page, ig.id, "reach", `IG reach (${days}d)`, since, until),
-              igMetricSeries(page, ig.id, "reach", `IG reach (prior)`, prevSince, prevUntil),
-              igMetricSeries(
-                page,
-                ig.id,
-                "follower_count",
-                `New IG followers (${days}d)`,
-                since,
-                until
-              ),
-            ]);
-            igFollowers = stats?.followers_count;
-            igReach = reach;
-            igReachDelta = reach ? pctChange(reach.total, reachPrev?.total ?? 0) : null;
-            if (reach) igCharts.push(reach);
-            if (followerAdds) igCharts.push(followerAdds);
-          } catch {
-            // Metrics unavailable — top posts above still render.
+            // Top posts unavailable — stats below still render.
           }
         }
       } catch {
         // No IG account resolvable at all — rest of the page still renders.
       }
-      postsLastWeekDelta = pctChange(postsLastWeek, fbPostsWeekBefore + igPostsWeekBefore);
+
+      // Cached stats — one Appwrite read per window instead of ~7 live
+      // Graph calls. Only ever covers through yesterday.
+      if (companyId) {
+        const untilYmd = yesterdayYmd();
+        const sinceYmd = addDaysYmd(untilYmd, -(days - 1));
+        const prevUntilYmd = addDaysYmd(sinceYmd, -1);
+        const prevSinceYmd = addDaysYmd(prevUntilYmd, -(days - 1));
+        // Cadence ("posts last week" / "the week before") is always a
+        // real trailing-14-days-through-yesterday window, independent of
+        // the days toggle above — a steady weekly rhythm check, not
+        // whatever range is being charted.
+        const cadenceSinceYmd = addDaysYmd(untilYmd, -13);
+
+        const [curRows, prevRows, cadenceRows] = await Promise.all([
+          getOrganicStats(companyId, sinceYmd, untilYmd),
+          getOrganicStats(companyId, prevSinceYmd, prevUntilYmd),
+          getOrganicStats(companyId, cadenceSinceYmd, untilYmd),
+        ]);
+
+        const sumBy = (rows: OrganicStatsDaily[], key: NumericStatKey) =>
+          rows.reduce((n, r) => n + r[key], 0);
+        const toSeries = (key: NumericStatKey, metric: string, title: string): MetricSeries => ({
+          metric,
+          title,
+          points: curRows.map((r) => ({ date: r.date, value: r[key] })),
+          total: sumBy(curRows, key),
+        });
+
+        if (curRows.length > 0) {
+          fbPageViews = toSeries("fbPageViews", "page_views_total", `Page views (${days}d)`);
+          fbPageViewsDelta = pctChange(sumBy(curRows, "fbPageViews"), sumBy(prevRows, "fbPageViews"));
+          fbCharts.push(fbPageViews);
+          fbCharts.push(toSeries("fbEngagement", "page_post_engagements", `Post engagements (${days}d)`));
+          fbCharts.push(toSeries("fbVideoViews", "page_video_views", `Video views (${days}d)`));
+
+          if (igConnected) {
+            igReach = toSeries("igReach", "reach", `IG reach (${days}d)`);
+            igReachDelta = pctChange(sumBy(curRows, "igReach"), sumBy(prevRows, "igReach"));
+            igCharts.push(igReach);
+            igCharts.push(toSeries("igFollowerAdds", "follower_count", `New IG followers (${days}d)`));
+            igFollowers = [...curRows]
+              .reverse()
+              .find((r) => r.igFollowersCount != null)?.igFollowersCount ?? undefined;
+          }
+        }
+
+        const weekAgoYmd = addDaysYmd(untilYmd, -6);
+        postsLastWeek = cadenceRows
+          .filter((r) => r.date >= weekAgoYmd)
+          .reduce((n, r) => n + r.postsPublishedCount, 0);
+        const priorWeekCount = cadenceRows
+          .filter((r) => r.date < weekAgoYmd)
+          .reduce((n, r) => n + r.postsPublishedCount, 0);
+        postsLastWeekDelta = pctChange(postsLastWeek, priorWeekCount);
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : "Could not load insights.";
     }
@@ -321,8 +316,7 @@ export default async function InsightsView({
           )}
           {fbCharts.length === 0 && (
             <p className="mt-6 font-mono text-[11px] text-muted">
-              No Facebook time-series metrics available — Meta periodically
-              retires metrics; this page shows whatever the API still serves.
+              No stats synced yet for this range — stats update once daily.
             </p>
           )}
 

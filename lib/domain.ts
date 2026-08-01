@@ -73,6 +73,39 @@ export interface InsightDaily {
   notes?: string;
 }
 
+/**
+ * One day's pre-aggregated organic (Page + IG Insights) numbers for one
+ * company — synced nightly by the scheduler app (see its
+ * lib/organicStats.ts) into `organic_stats_daily`, since those Meta
+ * Insights calls are too slow to run live on every page load. Only
+ * through yesterday: "today" isn't synced yet, so range queries should
+ * clip `until` accordingly.
+ */
+export interface OrganicStatsDaily {
+  $id: string;
+  companyId: string;
+  /** YYYY-MM-DD */
+  date: string;
+  fbPageViews: number;
+  fbEngagement: number;
+  fbFollows: number;
+  fbUnfollows: number;
+  fbVideoViews: number;
+  /** Point-in-time snapshot as of sync — null except on the most recently synced date. */
+  fbFanCount: number | null;
+  igConnected: boolean;
+  igProfileViews: number;
+  igReach: number;
+  igEngagement: number;
+  igFollowerAdds: number;
+  /** Point-in-time snapshot as of sync — null except on the most recently synced date. */
+  igFollowersCount: number | null;
+  /** Point-in-time snapshot as of sync — null except on the most recently synced date. */
+  igMediaCount: number | null;
+  /** FB + IG posts published that day (count only — no content stored). */
+  postsPublishedCount: number;
+}
+
 export const COST_CATEGORIES = [
   "creative_production",
   "strategy",
@@ -219,6 +252,19 @@ export function rangeToDates(key: string): { since: string; until: string } {
   since.setDate(until.getDate() - (preset.days - 1));
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return { since: fmt(since), until: fmt(until) };
+}
+
+/** Yesterday (UTC) as YYYY-MM-DD — the nightly organic-stats sync never covers "today". */
+export function yesterdayYmd(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+export function addDaysYmd(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /** The period immediately preceding [since, until], same length — for period-over-period deltas. */

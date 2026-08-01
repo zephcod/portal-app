@@ -10,6 +10,7 @@ export const COLLECTIONS = {
   insights: "insights_daily",
   issues: "report_issues",
   costs: "campaign_costs",
+  organicStats: "organic_stats_daily",
 } as const;
 
 let _db: Databases | null = null;

@@ -30,9 +30,18 @@ npm install
 npm run dev            # http://localhost:3002
 ```
 
-Data is written by the other apps — the reports app syncs ad insights,
-the scheduler owns posting and the IG queue publishers. This portal only
-reads (plus creating issue documents), so it needs no cron jobs.
+Data is written by the other apps — the reports app syncs ad insights
+into `insights_daily`, the scheduler owns posting/queues and nightly
+syncs organic (Page + IG Insights) stats into `organic_stats_daily`
+(its lib/organicStats.ts, cron via GitHub Actions — see its
+`organic-stats-cron.yml`). This portal only reads (plus creating issue
+documents), so it needs no cron jobs of its own.
+
+Overview and Insights read `organic_stats_daily` for their stat
+tiles/charts (fast — no live Meta calls, but only ever covers through
+yesterday); "Upcoming"/"Recently published"/"Top posts" content sections
+still call the Graph API live on every request, since that data isn't
+cached.
 
 ## Relationship to the other Awaj apps
 

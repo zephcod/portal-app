@@ -47,6 +47,7 @@ async function InsightsBody({ days }: { days: number }) {
               : "Your account isn't linked to a page yet — contact your Awaj ET account manager."
           }
           days={days}
+          companyId={ctx?.session.cid}
         />
       </div>
     </>
