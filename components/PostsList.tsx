@@ -1,34 +1,29 @@
 import { ArrowUpRight, Clapperboard, Heart, LayoutGrid, MessageCircle, Repeat2 } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { LoadMoreList } from "@/components/LoadMoreList";
 import { PlatformIcon } from "@/components/PlatformIcon";
+import { Skeleton } from "@/components/ui/skeleton";
 import { fbQueueConfigured, igQueueConfigured } from "@/lib/env";
 import { listFbQueue, type FbQueueItem } from "@/lib/fbqueue";
-import {
-  listPublishedPosts,
-  listScheduledPosts,
-  type PublishedPost,
-  type ScheduledPost,
-} from "@/lib/facebook";
+import { listPublishedPosts, type PublishedPost } from "@/lib/facebook";
 import { fmtDateTime, relativeFromNow } from "@/lib/format";
 import { listIgQueue, type IgQueueItem } from "@/lib/igqueue";
 import { getIgAccount, listIgMedia, type IgMedia } from "@/lib/instagram";
 import type { ManagedPage } from "@/lib/pages";
 import { mediaUrl } from "@/lib/storage";
 
-type Badge = { Icon: typeof LayoutGrid; label: string };
 type Stat = { Icon: typeof Heart; value: number };
 
 /**
  * Upcoming (Facebook + IG queued) and recently published posts for one
  * page. Server component embedded below the calendar in Content Hub.
  *
- * Scheduling now runs through Appwrite queues (fb_queue, ig_queue) —
- * see the Social Platform Manager's lib/fbqueue.ts and lib/igqueue.ts —
- * not Facebook's own scheduler, so thumbnails are staged Appwrite media
- * (lib/storage.ts), not Graph fields. `listScheduledPosts` still runs
- * alongside it purely to surface any posts scheduled before the
- * migration; that list only shrinks over time as they publish.
+ * "Upcoming" is Appwrite-only (fb_queue, ig_queue) and renders
+ * immediately — Facebook's native scheduler is being phased out
+ * entirely, so it's no longer read here at all. "Recently published"
+ * still needs live Graph calls (listPublishedPosts, listIgMedia) and
+ * streams in via a nested Suspense instead of blocking Upcoming.
  */
 export default async function PostsList({
   page,
@@ -37,39 +32,29 @@ export default async function PostsList({
   page: ManagedPage | null;
   error?: string | null;
 }) {
-  let fbScheduled: ScheduledPost[] = [];
   let fbQueued: FbQueueItem[] = [];
   let igQueued: IgQueueItem[] = [];
-  let published: PublishedPost[] = [];
-  let igMedia: IgMedia[] = [];
   let error: string | null = externalError ?? null;
 
   if (!error && page) {
-    try {
-      [fbScheduled, published] = await Promise.all([
-        listScheduledPosts(page),
-        listPublishedPosts(page),
-      ]);
-      if (fbQueueConfigured()) {
+    if (fbQueueConfigured()) {
+      try {
         // Clients see only cleanly pending items — no failure internals.
         fbQueued = (await listFbQueue(page.id)).filter(
           (i) => i.status === "pending" || i.status === "publishing"
         );
+      } catch {
+        // queue unreachable — IG upcoming still shown
       }
-      if (igQueueConfigured()) {
+    }
+    if (igQueueConfigured()) {
+      try {
         igQueued = (await listIgQueue(page.id)).filter(
           (i) => i.status === "pending" || i.status === "publishing"
         );
-      }
-      // Instagram published posts — optional, never blocks Facebook's.
-      try {
-        const ig = await getIgAccount(page);
-        if (ig) igMedia = await listIgMedia(page, ig.id, 25);
       } catch {
-        // no IG account / unreachable — Facebook's published list still shows
+        // queue unreachable — FB upcoming still shown
       }
-    } catch (e) {
-      error = e instanceof Error ? e.message : "Could not load posts.";
     }
   }
 
@@ -92,17 +77,6 @@ export default async function PostsList({
   }
 
   const upcoming = [
-    ...fbScheduled.map((p) => ({
-      key: `fb-${p.id}`,
-      postId: p.id,
-      href: `/posts/${p.id}?source=fb-scheduled`,
-      when: p.scheduled_publish_time,
-      platform: "fb" as const,
-      platformLabel: "Facebook",
-      text: p.message || "(photo post)",
-      image: p.full_picture,
-      badge: undefined as Badge | undefined,
-    })),
     ...fbQueued.map((item) => ({
       key: `fbq-${item.$id}`,
       postId: item.$id,
@@ -136,42 +110,6 @@ export default async function PostsList({
             : undefined,
     })),
   ].sort((a, b) => a.when - b.when);
-
-  const recentlyPublished = [
-    ...published.map((p) => ({
-      key: `fb-${p.id}`,
-      when: new Date(p.created_time).getTime(),
-      whenLabel: p.created_time,
-      platform: "fb" as const,
-      href: `/posts/${p.id}?source=fb-published`,
-      permalink: p.permalink_url,
-      permalinkLabel: "View on Facebook",
-      text: p.message || "(photo post)",
-      image: p.full_picture,
-      stats: [
-        { Icon: Heart, value: p.reactions?.summary?.total_count ?? 0 },
-        { Icon: MessageCircle, value: p.comments?.summary?.total_count ?? 0 },
-        { Icon: Repeat2, value: p.shares?.count ?? 0 },
-      ] satisfies Stat[],
-    })),
-    ...igMedia
-      .filter((m) => Boolean(m.timestamp))
-      .map((m) => ({
-        key: `ig-${m.id}`,
-        when: new Date(m.timestamp!).getTime(),
-        whenLabel: m.timestamp!,
-        platform: "ig" as const,
-        href: `/posts/${m.id}?source=ig-published`,
-        permalink: m.permalink,
-        permalinkLabel: "View on Instagram",
-        text: m.caption || "(image post)",
-        image: m.thumbnail_url ?? m.media_url,
-        stats: [
-          { Icon: Heart, value: m.like_count ?? 0 },
-          { Icon: MessageCircle, value: m.comments_count ?? 0 },
-        ] satisfies Stat[],
-      })),
-  ].sort((a, b) => b.when - a.when);
 
   return (
     <div>
@@ -240,67 +178,173 @@ export default async function PostsList({
             />
           )}
 
-          <h3 className="mt-10 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
-            Recently published
-          </h3>
-          {recentlyPublished.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">No published posts yet.</p>
-          ) : (
-            <LoadMoreList
-              pageSize={6}
-              items={recentlyPublished.map((p) => (
-                <li
-                  key={p.key}
-                  className="rounded-lg border border-edge bg-card p-4 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="font-mono text-xs text-muted">
-                      {fmtDateTime(p.whenLabel)} EAT
-                    </span>
-                    <span className="inline-flex items-center gap-1 font-mono text-[10px] text-muted">
-                      <PlatformIcon platform={p.platform} />
-                    </span>
-                    {p.permalink && (
-                      <a
-                        href={p.permalink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-auto flex items-center gap-1 font-mono text-[11px] text-amber underline"
-                      >
-                        {p.permalinkLabel}
-                        <ArrowUpRight className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                  <Link
-                    href={p.href}
-                    className="-mx-1 block rounded-md px-1 transition-colors hover:bg-app"
-                  >
-                    <div className="mt-2 flex gap-4">
-                      {p.image && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.image}
-                          alt=""
-                          className="h-20 w-20 shrink-0 rounded-md border border-edge object-cover"
-                        />
-                      )}
-                      <p className="text-sm whitespace-pre-wrap">{p.text}</p>
-                    </div>
-                    <div className="mt-3 flex gap-5 border-t border-edge pt-3 font-mono text-[11px] text-muted">
-                      {p.stats.map(({ Icon, value }, i) => (
-                        <span key={i} className="flex items-center gap-1">
-                          <Icon className="h-3 w-3" /> {value}
-                        </span>
-                      ))}
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            />
-          )}
+          <Suspense fallback={<RecentlyPublishedSkeleton />}>
+            <RecentlyPublished page={page} error={error} />
+          </Suspense>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Recently published posts — the one part of Content Hub's post list
+ * that still needs live Graph calls (listPublishedPosts, listIgMedia),
+ * so it's kept in its own nested Suspense rather than blocking Upcoming
+ * above it, which is Appwrite-only.
+ */
+async function RecentlyPublished({
+  page,
+  error: externalError,
+}: {
+  page: ManagedPage | null;
+  error: string | null;
+}) {
+  let published: PublishedPost[] = [];
+  let igMedia: IgMedia[] = [];
+  let error = externalError;
+
+  if (!error && page) {
+    try {
+      published = await listPublishedPosts(page);
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Could not load published posts.";
+    }
+    // Instagram published posts — optional, never blocks Facebook's.
+    try {
+      const ig = await getIgAccount(page);
+      if (ig) igMedia = await listIgMedia(page, ig.id, 25);
+    } catch {
+      // no IG account / unreachable — Facebook's published list still shows
+    }
+  }
+
+  const recentlyPublished = [
+    ...published.map((p) => ({
+      key: `fb-${p.id}`,
+      when: new Date(p.created_time).getTime(),
+      whenLabel: p.created_time,
+      platform: "fb" as const,
+      href: `/posts/${p.id}?source=fb-published`,
+      permalink: p.permalink_url,
+      permalinkLabel: "View on Facebook",
+      text: p.message || "(photo post)",
+      image: p.full_picture,
+      stats: [
+        { Icon: Heart, value: p.reactions?.summary?.total_count ?? 0 },
+        { Icon: MessageCircle, value: p.comments?.summary?.total_count ?? 0 },
+        { Icon: Repeat2, value: p.shares?.count ?? 0 },
+      ] satisfies Stat[],
+    })),
+    ...igMedia
+      .filter((m) => Boolean(m.timestamp))
+      .map((m) => ({
+        key: `ig-${m.id}`,
+        when: new Date(m.timestamp!).getTime(),
+        whenLabel: m.timestamp!,
+        platform: "ig" as const,
+        href: `/posts/${m.id}?source=ig-published`,
+        permalink: m.permalink,
+        permalinkLabel: "View on Instagram",
+        text: m.caption || "(image post)",
+        image: m.thumbnail_url ?? m.media_url,
+        stats: [
+          { Icon: Heart, value: m.like_count ?? 0 },
+          { Icon: MessageCircle, value: m.comments_count ?? 0 },
+        ] satisfies Stat[],
+      })),
+  ].sort((a, b) => b.when - a.when);
+
+  return (
+    <>
+      <h3 className="mt-10 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
+        Recently published
+      </h3>
+      {error ? (
+        <p className="mt-3 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+          {error}
+        </p>
+      ) : recentlyPublished.length === 0 ? (
+        <p className="mt-3 text-sm text-muted">No published posts yet.</p>
+      ) : (
+        <LoadMoreList
+          pageSize={6}
+          items={recentlyPublished.map((p) => (
+            <li
+              key={p.key}
+              className="rounded-lg border border-edge bg-card p-4 shadow-sm"
+            >
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="font-mono text-xs text-muted">
+                  {fmtDateTime(p.whenLabel)} EAT
+                </span>
+                <span className="inline-flex items-center gap-1 font-mono text-[10px] text-muted">
+                  <PlatformIcon platform={p.platform} />
+                </span>
+                {p.permalink && (
+                  <a
+                    href={p.permalink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-auto flex items-center gap-1 font-mono text-[11px] text-amber underline"
+                  >
+                    {p.permalinkLabel}
+                    <ArrowUpRight className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+              <Link
+                href={p.href}
+                className="-mx-1 block rounded-md px-1 transition-colors hover:bg-app"
+              >
+                <div className="mt-2 flex gap-4">
+                  {p.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.image}
+                      alt=""
+                      className="h-20 w-20 shrink-0 rounded-md border border-edge object-cover"
+                    />
+                  )}
+                  <p className="text-sm whitespace-pre-wrap">{p.text}</p>
+                </div>
+                <div className="mt-3 flex gap-5 border-t border-edge pt-3 font-mono text-[11px] text-muted">
+                  {p.stats.map(({ Icon, value }, i) => (
+                    <span key={i} className="flex items-center gap-1">
+                      <Icon className="h-3 w-3" /> {value}
+                    </span>
+                  ))}
+                </div>
+              </Link>
+            </li>
+          ))}
+        />
+      )}
+    </>
+  );
+}
+
+function RecentlyPublishedSkeleton() {
+  return (
+    <>
+      <Skeleton className="mt-10 h-3 w-40" />
+      <div className="mt-3 flex flex-col gap-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="rounded-lg border border-edge bg-card p-4 shadow-sm">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+            <div className="mt-3 flex gap-4">
+              <Skeleton className="h-20 w-20 shrink-0 rounded-md" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-2/3" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

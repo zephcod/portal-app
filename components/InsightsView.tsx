@@ -1,6 +1,8 @@
 import { Heart, MessageCircle, Repeat2 } from "lucide-react";
+import { Suspense } from "react";
 import { InfoTip } from "@/components/InfoTip";
 import { PlatformIcon } from "@/components/PlatformIcon";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getOrganicStats } from "@/lib/data";
 import {
   addDaysYmd,
@@ -8,12 +10,9 @@ import {
   yesterdayYmd,
   type OrganicStatsDaily,
 } from "@/lib/domain";
-import { igQueueConfigured } from "@/lib/env";
-import {
-  listPublishedPosts,
-  listScheduledPosts,
-  type PublishedPost,
-} from "@/lib/facebook";
+import { fbQueueConfigured, igQueueConfigured } from "@/lib/env";
+import { listFbQueue } from "@/lib/fbqueue";
+import { listPublishedPosts, type PublishedPost } from "@/lib/facebook";
 import { listIgQueue } from "@/lib/igqueue";
 import type { MetricSeries } from "@/lib/insights";
 import { getIgAccount, listIgMedia, type IgMedia } from "@/lib/instagram";
@@ -117,12 +116,12 @@ const igEngagement = (m: IgMedia) =>
 
 /**
  * Insights dashboard for one page — stat cards, daily charts, top posts.
- * Server component shared by the team view (/insights) and the client
- * portal (/client/insights). Stat cards/charts read pre-aggregated
- * numbers from `organic_stats_daily` (nightly Meta sync — see the
- * scheduler app's lib/organicStats.ts), never covering "today"; top
- * posts and the scheduled-ahead count are content/real-time and still
- * fetched live from Meta on every render.
+ * Stat cards/charts read pre-aggregated numbers from `organic_stats_daily`
+ * (nightly Meta sync — see the scheduler app's lib/organicStats.ts) and
+ * the scheduling queues (Appwrite) — no live Meta calls, so they render
+ * as part of this component directly. Top posts are the one thing that
+ * still needs a live Graph call (listPublishedPosts / listIgMedia) and
+ * stream in via a nested Suspense instead of blocking the stats above.
  */
 export default async function InsightsView({
   page,
@@ -139,15 +138,12 @@ export default async function InsightsView({
   let error: string | null = externalError ?? null;
   let fanCount: number | undefined;
   let igFollowers: number | undefined;
-  let igUsername = "";
   let fbPageViews: MetricSeries | null = null;
   let fbPageViewsDelta: number | null = null;
   let igReach: MetricSeries | null = null;
   let igReachDelta: number | null = null;
   const fbCharts: MetricSeries[] = [];
   const igCharts: MetricSeries[] = [];
-  let topFb: PublishedPost[] = [];
-  let topIg: IgMedia[] = [];
   let postsLastWeek = 0;
   let postsLastWeekDelta: number | null = null;
   let scheduledAhead = 0;
@@ -156,16 +152,18 @@ export default async function InsightsView({
     try {
       fanCount = page.fanCount;
 
-      // Top FB posts by engagement (content — stays live).
-      const posts = await listPublishedPosts(page);
-      topFb = [...posts]
-        .sort((a, b) => fbEngagement(b) - fbEngagement(a))
-        .slice(0, 5);
-
-      // Scheduled ahead: FB native queue + pending IG queue items — a
-      // real-time queue count, not a historical metric, so it stays live.
-      const fbScheduled = await listScheduledPosts(page);
-      scheduledAhead += fbScheduled.length;
+      // Scheduled ahead: pending fb_queue + ig_queue items — a real-time
+      // Appwrite queue count, not a historical metric. Facebook's native
+      // scheduler is being phased out entirely, so it's not counted here.
+      if (fbQueueConfigured()) {
+        try {
+          scheduledAhead += (await listFbQueue(page.id)).filter(
+            (i) => i.status === "pending" || i.status === "publishing"
+          ).length;
+        } catch {
+          // queue unreachable — IG count still shown
+        }
+      }
       if (igQueueConfigured()) {
         try {
           scheduledAhead += (await listIgQueue(page.id)).filter(
@@ -174,26 +172,6 @@ export default async function InsightsView({
         } catch {
           // queue unreachable — FB count still shown
         }
-      }
-
-      // Top IG posts (content — stays live); also the source of igUsername.
-      let igConnected = false;
-      try {
-        const ig = await getIgAccount(page);
-        if (ig) {
-          igConnected = true;
-          igUsername = ig.username ?? "";
-          try {
-            const media = await listIgMedia(page, ig.id, 25);
-            topIg = [...media]
-              .sort((a, b) => igEngagement(b) - igEngagement(a))
-              .slice(0, 5);
-          } catch {
-            // Top posts unavailable — stats below still render.
-          }
-        }
-      } catch {
-        // No IG account resolvable at all — rest of the page still renders.
       }
 
       // Cached stats — one Appwrite read per window instead of ~7 live
@@ -231,7 +209,9 @@ export default async function InsightsView({
           fbCharts.push(toSeries("fbEngagement", "page_post_engagements", `Post engagements (${days}d)`));
           fbCharts.push(toSeries("fbVideoViews", "page_video_views", `Video views (${days}d)`));
 
-          if (igConnected) {
+          // IG connection is read from the cache (not a live check) so
+          // this whole block stays Appwrite-only.
+          if (curRows.some((r) => r.igConnected)) {
             igReach = toSeries("igReach", "reach", `IG reach (${days}d)`);
             igReachDelta = pctChange(sumBy(curRows, "igReach"), sumBy(prevRows, "igReach"));
             igCharts.push(igReach);
@@ -320,111 +300,183 @@ export default async function InsightsView({
             </p>
           )}
 
-          {/* Top posts */}
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <div>
-              <h2 className="flex items-center gap-1.5 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
-                <PlatformIcon platform="fb" /> Top Facebook posts
-              </h2>
-              <ul className="mt-3 flex flex-col gap-2">
-                {topFb.map((p) => (
-                  <li
-                    key={p.id}
-                    className="rounded-lg border border-edge bg-card p-3 shadow-sm"
-                  >
-                    <a
-                      href={p.permalink_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      <p className="line-clamp-2 text-sm">
-                        {p.message || (
-                          <span className="text-muted italic">(photo)</span>
-                        )}
-                      </p>
-                      <p className="mt-1.5 flex flex-wrap items-center gap-x-1 font-mono text-[10px] text-muted">
-                        <span className="inline-flex items-center gap-0.5">
-                          <Heart className="h-3 w-3" /> {p.reactions?.summary?.total_count ?? 0}
-                        </span>
-                        ·
-                        <span className="inline-flex items-center gap-0.5">
-                          <MessageCircle className="h-3 w-3" /> {p.comments?.summary?.total_count ?? 0}
-                        </span>
-                        ·
-                        <span className="inline-flex items-center gap-0.5">
-                          <Repeat2 className="h-3 w-3" /> {p.shares?.count ?? 0}
-                        </span>
-                        · {p.created_time.slice(0, 10)}
-                      </p>
-                    </a>
-                  </li>
-                ))}
-                {topFb.length === 0 && (
-                  <li className="text-sm text-muted">No posts yet.</li>
-                )}
-              </ul>
-            </div>
-            <div>
-              <h2 className="flex items-center gap-1.5 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
-                <PlatformIcon platform="ig" /> Top Instagram posts
-                {igUsername && ` · @${igUsername}`}
-              </h2>
-              <ul className="mt-3 flex flex-col gap-2">
-                {topIg.map((m) => (
-                  <li
-                    key={m.id}
-                    className="rounded-lg border border-edge bg-card p-3 shadow-sm"
-                  >
-                    <a
-                      href={m.permalink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3"
-                    >
-                      {(m.thumbnail_url ?? m.media_url) && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={m.thumbnail_url ?? m.media_url}
-                          alt=""
-                          className="h-12 w-12 shrink-0 rounded-md border border-edge object-cover"
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <p className="line-clamp-1 text-sm">
-                          {m.caption || (
-                            <span className="text-muted italic">(image)</span>
-                          )}
-                        </p>
-                        <p className="mt-1 flex flex-wrap items-center gap-x-1 font-mono text-[10px] text-muted">
-                          <span className="inline-flex items-center gap-0.5">
-                            <Heart className="h-3 w-3" /> {m.like_count ?? 0}
-                          </span>
-                          ·
-                          <span className="inline-flex items-center gap-0.5">
-                            <MessageCircle className="h-3 w-3" /> {m.comments_count ?? 0}
-                          </span>
-                          · {(m.timestamp ?? "").slice(0, 10)}
-                        </p>
-                      </div>
-                    </a>
-                  </li>
-                ))}
-                {topIg.length === 0 && (
-                  <li className="text-sm text-muted">
-                    No Instagram media (or no IG account linked).
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-
           <p className="mt-6 font-mono text-[10px] text-muted">
-            Top posts ranked by engagement across the 25 most recent posts per
-            platform. Charts show daily values; totals are sums over the range.
+            Charts show daily values; totals are sums over the range.
           </p>
+
+          {page && (
+            <Suspense fallback={<TopPostsSkeleton />}>
+              <TopPostsSection page={page} />
+            </Suspense>
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Top posts by engagement — the one part of this page that still needs
+ * live Graph calls (listPublishedPosts, getIgAccount + listIgMedia), so
+ * it's kept in its own nested Suspense rather than blocking the stat
+ * cards/charts above, which are Appwrite-only.
+ */
+async function TopPostsSection({ page }: { page: ManagedPage }) {
+  let topFb: PublishedPost[] = [];
+  let topIg: IgMedia[] = [];
+  let igUsername = "";
+
+  try {
+    const posts = await listPublishedPosts(page);
+    topFb = [...posts].sort((a, b) => fbEngagement(b) - fbEngagement(a)).slice(0, 5);
+  } catch {
+    // Top FB posts unavailable — IG side below still renders.
+  }
+
+  try {
+    const ig = await getIgAccount(page);
+    if (ig) {
+      igUsername = ig.username ?? "";
+      try {
+        const media = await listIgMedia(page, ig.id, 25);
+        topIg = [...media].sort((a, b) => igEngagement(b) - igEngagement(a)).slice(0, 5);
+      } catch {
+        // Top IG posts unavailable — FB side above still renders.
+      }
+    }
+  } catch {
+    // No IG account resolvable at all.
+  }
+
+  return (
+    <>
+      <div className="mt-8 grid gap-6 md:grid-cols-2">
+        <div>
+          <h2 className="flex items-center gap-1.5 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
+            <PlatformIcon platform="fb" /> Top Facebook posts
+          </h2>
+          <ul className="mt-3 flex flex-col gap-2">
+            {topFb.map((p) => (
+              <li
+                key={p.id}
+                className="rounded-lg border border-edge bg-card p-3 shadow-sm"
+              >
+                <a
+                  href={p.permalink_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <p className="line-clamp-2 text-sm">
+                    {p.message || (
+                      <span className="text-muted italic">(photo)</span>
+                    )}
+                  </p>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-x-1 font-mono text-[10px] text-muted">
+                    <span className="inline-flex items-center gap-0.5">
+                      <Heart className="h-3 w-3" /> {p.reactions?.summary?.total_count ?? 0}
+                    </span>
+                    ·
+                    <span className="inline-flex items-center gap-0.5">
+                      <MessageCircle className="h-3 w-3" /> {p.comments?.summary?.total_count ?? 0}
+                    </span>
+                    ·
+                    <span className="inline-flex items-center gap-0.5">
+                      <Repeat2 className="h-3 w-3" /> {p.shares?.count ?? 0}
+                    </span>
+                    · {p.created_time.slice(0, 10)}
+                  </p>
+                </a>
+              </li>
+            ))}
+            {topFb.length === 0 && (
+              <li className="text-sm text-muted">No posts yet.</li>
+            )}
+          </ul>
+        </div>
+        <div>
+          <h2 className="flex items-center gap-1.5 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
+            <PlatformIcon platform="ig" /> Top Instagram posts
+            {igUsername && ` · @${igUsername}`}
+          </h2>
+          <ul className="mt-3 flex flex-col gap-2">
+            {topIg.map((m) => (
+              <li
+                key={m.id}
+                className="rounded-lg border border-edge bg-card p-3 shadow-sm"
+              >
+                <a
+                  href={m.permalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3"
+                >
+                  {(m.thumbnail_url ?? m.media_url) && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={m.thumbnail_url ?? m.media_url}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-md border border-edge object-cover"
+                    />
+                  )}
+                  <div className="min-w-0">
+                    <p className="line-clamp-1 text-sm">
+                      {m.caption || (
+                        <span className="text-muted italic">(image)</span>
+                      )}
+                    </p>
+                    <p className="mt-1 flex flex-wrap items-center gap-x-1 font-mono text-[10px] text-muted">
+                      <span className="inline-flex items-center gap-0.5">
+                        <Heart className="h-3 w-3" /> {m.like_count ?? 0}
+                      </span>
+                      ·
+                      <span className="inline-flex items-center gap-0.5">
+                        <MessageCircle className="h-3 w-3" /> {m.comments_count ?? 0}
+                      </span>
+                      · {(m.timestamp ?? "").slice(0, 10)}
+                    </p>
+                  </div>
+                </a>
+              </li>
+            ))}
+            {topIg.length === 0 && (
+              <li className="text-sm text-muted">
+                No Instagram media (or no IG account linked).
+              </li>
+            )}
+          </ul>
+        </div>
+      </div>
+
+      <p className="mt-6 font-mono text-[10px] text-muted">
+        Top posts ranked by engagement across the 25 most recent posts per
+        platform.
+      </p>
+    </>
+  );
+}
+
+function TopPostsSkeleton() {
+  return (
+    <div className="mt-8 grid gap-6 md:grid-cols-2">
+      {Array.from({ length: 2 }, (_, i) => (
+        <div key={i}>
+          <Skeleton className="h-3 w-36" />
+          <div className="mt-3 flex flex-col gap-2">
+            {Array.from({ length: 3 }, (_, j) => (
+              <div key={j} className="rounded-lg border border-edge bg-card p-3 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-12 w-12 shrink-0 rounded-md" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-3.5 w-full" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

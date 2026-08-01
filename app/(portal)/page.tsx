@@ -33,13 +33,10 @@ import {
 } from "@/lib/domain";
 import { fbQueueConfigured, igQueueConfigured } from "@/lib/env";
 import { listFbQueue } from "@/lib/fbqueue";
-import {
-  listPublishedPosts,
-  listScheduledPosts,
-  type PublishedPost,
-} from "@/lib/facebook";
+import { listPublishedPosts, type PublishedPost } from "@/lib/facebook";
 import { fmtDateTime } from "@/lib/format";
 import { listIgQueue } from "@/lib/igqueue";
+import type { ManagedPage } from "@/lib/pages";
 import { getSession } from "@/lib/server-session";
 import type { ClientSession } from "@/lib/clientsession";
 
@@ -62,11 +59,14 @@ const fbEngagement = (p: PublishedPost) =>
 function sumOrganicRows(rows: OrganicStatsDaily[]) {
   return rows.reduce(
     (acc, r) => ({
+      // IG only for now — Meta retired page-level reach reporting for
+      // Facebook Pages, so there's no fbReach field to add in here.
+      reach: acc.reach + r.igReach,
       pageViews: acc.pageViews + r.fbPageViews + r.igProfileViews,
       engagement: acc.engagement + r.fbEngagement + r.igEngagement,
       followersNet: acc.followersNet + (r.fbFollows - r.fbUnfollows) + r.igFollowerAdds,
     }),
-    { pageViews: 0, engagement: 0, followersNet: 0 }
+    { reach: 0, pageViews: 0, engagement: 0, followersNet: 0 }
   );
 }
 
@@ -142,6 +142,8 @@ async function OverviewBody({
   const openIssues = issues.filter((i) => i.status === "open" || i.status === "in_review");
 
   let organicError: string | null = null;
+  let reachTotal = 0;
+  let reachDelta: number | null = null;
   let pageViewsTotal = 0;
   let pageViewsDelta: number | null = null;
   let pageViewsPoints: SeriesPoint[] = [];
@@ -160,32 +162,32 @@ async function OverviewBody({
     label: string;
   }[] = [];
   let awaitingReview = 0;
-  let topPosts: PublishedPost[] = [];
   // Cadence gap: zero organic posts (FB + IG combined) in the trailing 7
   // days — an early-warning signal, not an error, so it's a quiet dot in
   // "Attention needed" rather than a banner.
   let postsLastWeekCount = 0;
+  let page: ManagedPage | null = null;
 
   if (!ctx) {
     organicError =
       "Your account isn't linked to a page yet — contact your Awaj ET account manager.";
   } else {
-    // Stats come from the nightly organic-stats sync (Appwrite), not live
-    // Meta calls — see the scheduler app's lib/organicStats.ts. It only
-    // ever covers through yesterday, so the query window is clipped
-    // accordingly; "today" simply has no row yet.
+    // Everything in this block is Appwrite-only (organic-stats cache,
+    // scheduling queues, comment lookups) — no live Meta Graph calls, so
+    // it resolves fast and renders as part of this same Suspense-gated
+    // body. "Top performing content" below is the one section that still
+    // needs a live Graph call (listPublishedPosts) and streams in via its
+    // own nested Suspense instead of blocking everything above it.
+    page = ctx.page;
     try {
-      const { page } = ctx;
       const cappedUntil = until < yesterdayYmd() ? until : yesterdayYmd();
       const cappedPrevUntil = prev.until < yesterdayYmd() ? prev.until : yesterdayYmd();
 
-      const [curRows, prevRows, fbScheduled, published] = await Promise.all([
+      const [curRows, prevRows] = await Promise.all([
         since <= cappedUntil ? getOrganicStats(session.cid, since, cappedUntil) : Promise.resolve([]),
         prev.since <= cappedPrevUntil
           ? getOrganicStats(session.cid, prev.since, cappedPrevUntil)
           : Promise.resolve([]),
-        listScheduledPosts(page),
-        listPublishedPosts(page),
       ]);
 
       let igQueueItems: Awaited<ReturnType<typeof listIgQueue>> = [];
@@ -216,6 +218,8 @@ async function OverviewBody({
 
       const curTotals = sumOrganicRows(curRows);
       const prevTotals = sumOrganicRows(prevRows);
+      reachTotal = curTotals.reach;
+      reachDelta = pctChange(curTotals.reach, prevTotals.reach);
       pageViewsTotal = curTotals.pageViews;
       pageViewsDelta = pctChange(curTotals.pageViews, prevTotals.pageViews);
       engagementTotal = curTotals.engagement;
@@ -223,18 +227,10 @@ async function OverviewBody({
       followersNet = curTotals.followersNet;
       followersDelta = pctChange(curTotals.followersNet, prevTotals.followersNet);
 
-      // ── Upcoming content (top 3) ── FB scheduling now runs through
-      // fb_queue (Appwrite), not Facebook's own scheduler — fbScheduled
-      // only surfaces posts scheduled before that migration.
+      // ── Upcoming content (top 3) ── Appwrite-only: FB scheduling now
+      // runs through fb_queue, not Facebook's native scheduler (being
+      // phased out entirely, so it's no longer read here at all).
       upcoming = [
-        ...fbScheduled.map((p) => ({
-          key: `fb-${p.id}`,
-          postId: p.id,
-          href: `/posts/${p.id}?source=fb-scheduled`,
-          when: p.scheduled_publish_time,
-          platform: "fb" as const,
-          label: p.message || "(photo post)",
-        })),
         ...fbQueueItems.map((item) => ({
           key: `fbq-${item.$id}`,
           postId: item.$id,
@@ -262,8 +258,6 @@ async function OverviewBody({
       );
       awaitingReview = reviewChecks.filter((approved) => !approved).length;
 
-      topPosts = [...published].sort((a, b) => fbEngagement(b) - fbEngagement(a)).slice(0, 3);
-
       // Cadence: real trailing-7-days-through-yesterday, independent of
       // the selected range — always a subset of curRows since every
       // range preset spans at least 7 days.
@@ -279,6 +273,14 @@ async function OverviewBody({
   return (
     <>
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile
+          label="Reach"
+          value={num(reachTotal)}
+          delta={reachDelta}
+          periodLabel={periodLabel}
+          unavailable={!organicError && statsNotSynced ? "Not synced yet" : undefined}
+          tip="Unique accounts reached — Instagram only for now. Meta retired page-level reach reporting for Facebook Pages."
+        />
         <StatTile
           label="Page views"
           value={num(pageViewsTotal)}
@@ -302,7 +304,6 @@ async function OverviewBody({
           unavailable={!organicError && statsNotSynced ? "Not synced yet" : undefined}
           tip="Net new followers this period. New follows minus unfollows, across Facebook and Instagram."
         />
-        <StatTile label="Ad leads" value={num(adTotals.leads)} delta={leadsDelta} periodLabel={periodLabel} />
       </section>
 
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
@@ -496,48 +497,97 @@ async function OverviewBody({
         </div>
       </section>
 
-      <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-        <h2 className="font-display mb-4 text-lg font-semibold">Top performing content</h2>
-        {topPosts.length === 0 ? (
-          <p className="text-sm text-muted">{organicError ?? "No published posts yet."}</p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-3">
-            {topPosts.map((p) => (
-              <Link
-                key={p.id}
-                href={`/posts/${p.id}?source=fb-published`}
-                className="block rounded-lg border border-edge p-3 shadow-sm transition-colors hover:border-gold"
-              >
-                {p.full_picture && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={p.full_picture}
-                    alt=""
-                    className="h-32 w-full rounded-md border border-edge object-cover"
-                  />
-                )}
-                <p className="mt-2 line-clamp-2 text-sm">
-                  {p.message || <span className="text-muted italic">(photo post)</span>}
-                </p>
-                <p className="mt-1.5 flex flex-wrap items-center gap-x-1 font-mono text-[10px] text-muted">
-                  <span className="inline-flex items-center gap-0.5">
-                    <Heart className="h-3 w-3" /> {p.reactions?.summary?.total_count ?? 0}
-                  </span>
-                  ·
-                  <span className="inline-flex items-center gap-0.5">
-                    <MessageCircle className="h-3 w-3" /> {p.comments?.summary?.total_count ?? 0}
-                  </span>
-                  ·
-                  <span className="inline-flex items-center gap-0.5">
-                    <Repeat2 className="h-3 w-3" /> {p.shares?.count ?? 0}
-                  </span>
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
+      {organicError ? (
+        <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
+          <h2 className="font-display mb-4 text-lg font-semibold">Top performing content</h2>
+          <p className="text-sm text-muted">{organicError}</p>
+        </section>
+      ) : (
+        <Suspense fallback={<TopPerformingSkeleton />}>
+          <TopPerformingContent page={page} />
+        </Suspense>
+      )}
     </>
+  );
+}
+
+/**
+ * The one section on Overview that still needs a live Graph call
+ * (listPublishedPosts) — kept in its own nested Suspense so the rest of
+ * the page (all Appwrite-sourced: KPIs, charts, upcoming, attention
+ * needed) never waits on it.
+ */
+async function TopPerformingContent({ page }: { page: ManagedPage | null }) {
+  let topPosts: PublishedPost[] = [];
+  let error: string | null = null;
+  if (page) {
+    try {
+      const published = await listPublishedPosts(page);
+      topPosts = [...published].sort((a, b) => fbEngagement(b) - fbEngagement(a)).slice(0, 3);
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Could not load top posts.";
+    }
+  }
+
+  return (
+    <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
+      <h2 className="font-display mb-4 text-lg font-semibold">Top performing content</h2>
+      {topPosts.length === 0 ? (
+        <p className="text-sm text-muted">{error ?? "No published posts yet."}</p>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {topPosts.map((p) => (
+            <Link
+              key={p.id}
+              href={`/posts/${p.id}?source=fb-published`}
+              className="block rounded-lg border border-edge p-3 shadow-sm transition-colors hover:border-gold"
+            >
+              {p.full_picture && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.full_picture}
+                  alt=""
+                  className="h-32 w-full rounded-md border border-edge object-cover"
+                />
+              )}
+              <p className="mt-2 line-clamp-2 text-sm">
+                {p.message || <span className="text-muted italic">(photo post)</span>}
+              </p>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-1 font-mono text-[10px] text-muted">
+                <span className="inline-flex items-center gap-0.5">
+                  <Heart className="h-3 w-3" /> {p.reactions?.summary?.total_count ?? 0}
+                </span>
+                ·
+                <span className="inline-flex items-center gap-0.5">
+                  <MessageCircle className="h-3 w-3" /> {p.comments?.summary?.total_count ?? 0}
+                </span>
+                ·
+                <span className="inline-flex items-center gap-0.5">
+                  <Repeat2 className="h-3 w-3" /> {p.shares?.count ?? 0}
+                </span>
+              </p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TopPerformingSkeleton() {
+  return (
+    <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
+      <Skeleton className="mb-4 h-5 w-56" />
+      <div className="grid gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i}>
+            <Skeleton className="h-32 w-full rounded-md" />
+            <Skeleton className="mt-2 h-3.5 w-full" />
+            <Skeleton className="mt-1.5 h-3 w-2/3" />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -586,18 +636,7 @@ function OverviewBodySkeleton() {
         </div>
       </section>
 
-      <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-        <Skeleton className="mb-4 h-5 w-56" />
-        <div className="grid gap-4 sm:grid-cols-3">
-          {Array.from({ length: 3 }, (_, i) => (
-            <div key={i}>
-              <Skeleton className="h-32 w-full rounded-md" />
-              <Skeleton className="mt-2 h-3.5 w-full" />
-              <Skeleton className="mt-1.5 h-3 w-2/3" />
-            </div>
-          ))}
-        </div>
-      </section>
+      <TopPerformingSkeleton />
     </>
   );
 }

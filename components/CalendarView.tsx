@@ -1,11 +1,12 @@
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { KIND_STYLE, fmtDayLabel, type CalEvent } from "@/components/CalendarShared";
 import { DayMorePopover } from "@/components/DayMorePopover";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { fbQueueConfigured, igQueueConfigured } from "@/lib/env";
 import { listFbQueue } from "@/lib/fbqueue";
-import { listPublishedPosts, listScheduledPosts } from "@/lib/facebook";
+import { listPublishedPosts } from "@/lib/facebook";
 import { listIgQueue } from "@/lib/igqueue";
 import { getIgAccount, listIgMedia } from "@/lib/instagram";
 import type { ManagedPage } from "@/lib/pages";
@@ -21,11 +22,40 @@ function eatTime(d: Date): string {
   return new Date(d.getTime() + EAT_OFFSET_MS).toISOString().slice(11, 16);
 }
 
+function addEvent(
+  events: Map<string, CalEvent[]>,
+  monthKey: string,
+  ymd: string,
+  ev: CalEvent
+) {
+  if (!ymd.startsWith(monthKey)) return;
+  const list = events.get(ymd) ?? [];
+  list.push(ev);
+  events.set(ymd, list);
+}
+
+function sortEvents(events: Map<string, CalEvent[]>) {
+  for (const list of events.values()) list.sort((a, b) => a.time.localeCompare(b.time));
+}
+
+function cloneEvents(events: Map<string, CalEvent[]>): Map<string, CalEvent[]> {
+  const out = new Map<string, CalEvent[]>();
+  for (const [k, v] of events) out.set(k, [...v]);
+  return out;
+}
+
 /**
  * Month-grid calendar of scheduled + published posts for one page.
  * Server component, shared by the team view (/calendar) and the
  * read-only client portal (/client/calendar). In readOnly mode there
  * are no compose links, no internal links, and no failure internals.
+ *
+ * Scheduled events (fb_queue + ig_queue, Appwrite) render immediately;
+ * published events (Facebook + Instagram, live Graph calls) stream in
+ * via a nested Suspense — its fallback is the same grid with just the
+ * scheduled events, so the first paint is a real, useful calendar
+ * rather than a skeleton, and it's upgraded in place once Graph data
+ * resolves.
  */
 export default async function CalendarView({
   page,
@@ -62,56 +92,17 @@ export default async function CalendarView({
     year: "numeric",
   }).format(new Date(Date.UTC(year, month - 1, 1)));
 
-  // ── Collect events ──
-  const events = new Map<string, CalEvent[]>();
-  const add = (ymd: string, ev: CalEvent) => {
-    if (!ymd.startsWith(monthKey)) return;
-    const list = events.get(ymd) ?? [];
-    list.push(ev);
-    events.set(ymd, list);
-  };
+  const error: string | null = externalError ?? null;
 
-  let error: string | null = externalError ?? null;
-
+  // ── Fast tier: Appwrite-only scheduled events (fb_queue + ig_queue) ──
+  const scheduledEvents = new Map<string, CalEvent[]>();
   if (!error && page) {
-    try {
-      const [fbScheduled, fbPublished] = await Promise.all([
-        listScheduledPosts(page),
-        listPublishedPosts(page),
-      ]);
-
-      for (const p of fbScheduled) {
-        const d = new Date(p.scheduled_publish_time * 1000);
-        add(eatYmd(d), {
-          time: eatTime(d),
-          platform: "fb",
-          kind: "scheduled",
-          label: p.message || "(photo)",
-          href: readOnly ? `/posts/${p.id}?source=fb-scheduled` : "/scheduled",
-        });
-      }
-      for (const p of fbPublished) {
-        const d = new Date(p.created_time);
-        add(eatYmd(d), {
-          time: eatTime(d),
-          platform: "fb",
-          kind: "published",
-          label: p.message || "(photo)",
-          href: readOnly
-            ? `/posts/${p.id}?source=fb-published`
-            : p.permalink_url,
-        });
-      }
-
-      // Facebook queue — scheduling now runs through Appwrite, not
-      // Facebook's own scheduler (see the Social Platform Manager's
-      // lib/fbqueue.ts); `fbScheduled` above only shows pre-migration
-      // legacy posts and shrinks over time.
-      if (fbQueueConfigured()) {
+    if (fbQueueConfigured()) {
+      try {
         for (const item of await listFbQueue(page.id)) {
           if (readOnly && item.status === "failed") continue;
           const d = new Date(item.scheduledAt * 1000);
-          add(eatYmd(d), {
+          addEvent(scheduledEvents, monthKey, eatYmd(d), {
             time: eatTime(d),
             platform: "fb",
             kind:
@@ -121,63 +112,37 @@ export default async function CalendarView({
                   ? "publishing"
                   : "scheduled",
             label: item.caption || "(no caption)",
-            href: readOnly
-              ? `/posts/${item.$id}?source=fb-queue`
-              : "/scheduled",
+            href: readOnly ? `/posts/${item.$id}?source=fb-queue` : "/scheduled",
           });
         }
+      } catch {
+        // queue unreachable — grid still renders with whatever's available
       }
-
-      // Instagram — optional, never blocks the FB calendar
+    }
+    if (igQueueConfigured()) {
       try {
-        const ig = await getIgAccount(page);
-        if (ig) {
-          const media = await listIgMedia(page, ig.id, 25);
-          for (const mItem of media) {
-            if (!mItem.timestamp) continue;
-            const d = new Date(mItem.timestamp);
-            add(eatYmd(d), {
-              time: eatTime(d),
-              platform: "ig",
-              kind: "published",
-              label: mItem.caption || "(image)",
-              href: readOnly
-                ? `/posts/${mItem.id}?source=ig-published`
-                : mItem.permalink,
-            });
-          }
-        }
-        if (igQueueConfigured()) {
-          for (const item of await listIgQueue(page.id)) {
-            if (readOnly && item.status === "failed") continue;
-            const d = new Date(item.scheduledAt * 1000);
-            add(eatYmd(d), {
-              time: eatTime(d),
-              platform: "ig",
-              kind:
-                item.status === "failed"
-                  ? "failed"
-                  : item.status === "publishing"
-                    ? "publishing"
-                    : "scheduled",
-              label: item.caption || "(image)",
-              href: readOnly
-                ? `/posts/${item.$id}?source=ig-queue`
-                : "/scheduled",
-            });
-          }
+        for (const item of await listIgQueue(page.id)) {
+          if (readOnly && item.status === "failed") continue;
+          const d = new Date(item.scheduledAt * 1000);
+          addEvent(scheduledEvents, monthKey, eatYmd(d), {
+            time: eatTime(d),
+            platform: "ig",
+            kind:
+              item.status === "failed"
+                ? "failed"
+                : item.status === "publishing"
+                  ? "publishing"
+                  : "scheduled",
+            label: item.caption || "(image)",
+            href: readOnly ? `/posts/${item.$id}?source=ig-queue` : "/scheduled",
+          });
         }
       } catch {
-        // IG issues are shown elsewhere; keep the calendar rendering
+        // queue unreachable — grid still renders with whatever's available
       }
-    } catch (e) {
-      error = e instanceof Error ? e.message : "Could not load calendar.";
     }
   }
-
-  for (const list of events.values()) {
-    list.sort((a, b) => a.time.localeCompare(b.time));
-  }
+  sortEvents(scheduledEvents);
 
   // ── Grid cells (leading blanks + days) ──
   const cells: (number | null)[] = [
@@ -246,99 +211,211 @@ export default async function CalendarView({
         </span>
       </div>
 
-      {/* Grid */}
-      <div className="mt-4 grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-edge bg-line">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-          <div
-            key={d}
-            className="bg-navy px-2 py-2 text-center font-mono text-[10px] tracking-wider text-white/60 uppercase"
-          >
-            {d}
-          </div>
-        ))}
-
-        {cells.map((day, i) => {
-          if (day === null) {
-            return <div key={`b${i}`} className="min-h-28 bg-app/60" />;
-          }
-          const ymd = `${monthKey}-${String(day).padStart(2, "0")}`;
-          const isToday = ymd === todayYmd;
-          const isPast = ymd < todayYmd;
-          const dayEvents = events.get(ymd) ?? [];
-          return (
-            <div
-              key={ymd}
-              className={`group min-h-28 bg-card p-1.5 ${isPast ? "bg-card/70" : ""}`}
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                    isToday
-                      ? "bg-gold font-bold text-navy"
-                      : "font-medium text-muted"
-                  }`}
-                >
-                  {day}
-                </span>
-                {!readOnly && !isPast && (
-                  <Link
-                    href={`/?when=${ymd}T09:00`}
-                    title="Compose for this day"
-                    className="hidden h-5 w-5 items-center justify-center rounded-full bg-app text-xs text-muted group-hover:flex hover:bg-gold hover:text-navy"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Link>
-                )}
-              </div>
-              <div className="mt-1 flex flex-col gap-1">
-                {dayEvents.slice(0, 4).map((ev, j) =>
-                  ev.href ? (
-                    <a
-                      key={j}
-                      href={ev.href}
-                      target={ev.href.startsWith("http") ? "_blank" : undefined}
-                      rel="noopener noreferrer"
-                      className={`truncate rounded px-1.5 py-1 text-[10px] leading-tight ${KIND_STYLE[ev.kind]}`}
-                      title={`${ev.time} EAT — ${ev.label}`}
-                    >
-                      <PlatformIcon
-                        platform={ev.platform}
-                        className="h-2.5 w-2.5 align-[-1px]"
-                      />{" "}
-                      {ev.time} {ev.label.slice(0, 30)}
-                    </a>
-                  ) : (
-                    <span
-                      key={j}
-                      className={`truncate rounded px-1.5 py-1 text-[10px] leading-tight ${KIND_STYLE[ev.kind]}`}
-                      title={`${ev.time} EAT — ${ev.label}`}
-                    >
-                      <PlatformIcon
-                        platform={ev.platform}
-                        className="h-2.5 w-2.5 align-[-1px]"
-                      />{" "}
-                      {ev.time} {ev.label.slice(0, 30)}
-                    </span>
-                  )
-                )}
-                {dayEvents.length > 4 && (
-                  <DayMorePopover
-                    count={dayEvents.length - 4}
-                    dateLabel={fmtDayLabel(ymd)}
-                    events={dayEvents}
-                  />
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <Suspense
+        fallback={
+          <CalendarGrid
+            cells={cells}
+            events={scheduledEvents}
+            todayYmd={todayYmd}
+            monthKey={monthKey}
+            readOnly={readOnly}
+          />
+        }
+      >
+        <PublishedOverlay
+          page={page}
+          error={error}
+          cells={cells}
+          monthKey={monthKey}
+          todayYmd={todayYmd}
+          readOnly={readOnly}
+          scheduledEvents={scheduledEvents}
+        />
+      </Suspense>
 
       <p className="mt-3 font-mono text-[10px] text-muted">
         Published history shows the 25 most recent posts per platform —
         older days may look empty.
         {!readOnly && " Hover a day and hit + to compose for it."}
       </p>
+    </div>
+  );
+}
+
+/**
+ * Adds published Facebook + Instagram posts (live Graph calls) on top
+ * of the already-fetched scheduled events, then renders the complete
+ * grid. This is what the calendar's Suspense boundary waits on; its
+ * fallback is the scheduled-only grid, not a skeleton.
+ */
+async function PublishedOverlay({
+  page,
+  error,
+  cells,
+  monthKey,
+  todayYmd,
+  readOnly,
+  scheduledEvents,
+}: {
+  page: ManagedPage | null;
+  error: string | null;
+  cells: (number | null)[];
+  monthKey: string;
+  todayYmd: string;
+  readOnly: boolean;
+  scheduledEvents: Map<string, CalEvent[]>;
+}) {
+  const events = cloneEvents(scheduledEvents);
+
+  if (!error && page) {
+    try {
+      const fbPublished = await listPublishedPosts(page);
+      for (const p of fbPublished) {
+        const d = new Date(p.created_time);
+        addEvent(events, monthKey, eatYmd(d), {
+          time: eatTime(d),
+          platform: "fb",
+          kind: "published",
+          label: p.message || "(photo)",
+          href: readOnly ? `/posts/${p.id}?source=fb-published` : p.permalink_url,
+        });
+      }
+    } catch {
+      // FB published unavailable — scheduled + IG events still shown
+    }
+
+    try {
+      const ig = await getIgAccount(page);
+      if (ig) {
+        const media = await listIgMedia(page, ig.id, 25);
+        for (const mItem of media) {
+          if (!mItem.timestamp) continue;
+          const d = new Date(mItem.timestamp);
+          addEvent(events, monthKey, eatYmd(d), {
+            time: eatTime(d),
+            platform: "ig",
+            kind: "published",
+            label: mItem.caption || "(image)",
+            href: readOnly ? `/posts/${mItem.id}?source=ig-published` : mItem.permalink,
+          });
+        }
+      }
+    } catch {
+      // IG issues — FB + scheduled events still shown
+    }
+  }
+  sortEvents(events);
+
+  return (
+    <CalendarGrid
+      cells={cells}
+      events={events}
+      todayYmd={todayYmd}
+      monthKey={monthKey}
+      readOnly={readOnly}
+    />
+  );
+}
+
+function CalendarGrid({
+  cells,
+  events,
+  monthKey,
+  todayYmd,
+  readOnly,
+}: {
+  cells: (number | null)[];
+  events: Map<string, CalEvent[]>;
+  monthKey: string;
+  todayYmd: string;
+  readOnly: boolean;
+}) {
+  return (
+    <div className="mt-4 grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-edge bg-line">
+      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+        <div
+          key={d}
+          className="bg-navy px-2 py-2 text-center font-mono text-[10px] tracking-wider text-white/60 uppercase"
+        >
+          {d}
+        </div>
+      ))}
+
+      {cells.map((day, i) => {
+        if (day === null) {
+          return <div key={`b${i}`} className="min-h-28 bg-app/60" />;
+        }
+        const ymd = `${monthKey}-${String(day).padStart(2, "0")}`;
+        const isToday = ymd === todayYmd;
+        const isPast = ymd < todayYmd;
+        const dayEvents = events.get(ymd) ?? [];
+        return (
+          <div
+            key={ymd}
+            className={`group min-h-28 bg-card p-1.5 ${isPast ? "bg-card/70" : ""}`}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                  isToday
+                    ? "bg-gold font-bold text-navy"
+                    : "font-medium text-muted"
+                }`}
+              >
+                {day}
+              </span>
+              {!readOnly && !isPast && (
+                <Link
+                  href={`/?when=${ymd}T09:00`}
+                  title="Compose for this day"
+                  className="hidden h-5 w-5 items-center justify-center rounded-full bg-app text-xs text-muted group-hover:flex hover:bg-gold hover:text-navy"
+                >
+                  <Plus className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
+            <div className="mt-1 flex flex-col gap-1">
+              {dayEvents.slice(0, 4).map((ev, j) =>
+                ev.href ? (
+                  <a
+                    key={j}
+                    href={ev.href}
+                    target={ev.href.startsWith("http") ? "_blank" : undefined}
+                    rel="noopener noreferrer"
+                    className={`truncate rounded px-1.5 py-1 text-[10px] leading-tight ${KIND_STYLE[ev.kind]}`}
+                    title={`${ev.time} EAT — ${ev.label}`}
+                  >
+                    <PlatformIcon
+                      platform={ev.platform}
+                      className="h-2.5 w-2.5 align-[-1px]"
+                    />{" "}
+                    {ev.time} {ev.label.slice(0, 30)}
+                  </a>
+                ) : (
+                  <span
+                    key={j}
+                    className={`truncate rounded px-1.5 py-1 text-[10px] leading-tight ${KIND_STYLE[ev.kind]}`}
+                    title={`${ev.time} EAT — ${ev.label}`}
+                  >
+                    <PlatformIcon
+                      platform={ev.platform}
+                      className="h-2.5 w-2.5 align-[-1px]"
+                    />{" "}
+                    {ev.time} {ev.label.slice(0, 30)}
+                  </span>
+                )
+              )}
+              {dayEvents.length > 4 && (
+                <DayMorePopover
+                  count={dayEvents.length - 4}
+                  dateLabel={fmtDayLabel(ymd)}
+                  events={dayEvents}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
