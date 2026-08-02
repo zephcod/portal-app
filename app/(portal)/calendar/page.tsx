@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import CalendarView from "@/components/CalendarView";
 import PostsList from "@/components/PostsList";
+import { ShowTopContentButton } from "@/components/ShowTopContentButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getClientPage } from "@/lib/clientpage";
 
@@ -9,21 +10,28 @@ export const dynamic = "force-dynamic";
 export default async function ClientCalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ m?: string }>;
+  searchParams: Promise<{ m?: string; top?: string }>;
 }) {
-  const { m } = await searchParams;
+  const { m, top } = await searchParams;
+  const showTop = Boolean(top);
 
   return (
     <div>
       <h1 className="font-display text-2xl font-bold">Content calendar</h1>
       <Suspense fallback={<CalendarBodySkeleton />}>
-        <CalendarBody monthParam={m} />
+        <CalendarBody monthParam={m} showTop={showTop} />
       </Suspense>
     </div>
   );
 }
 
-async function CalendarBody({ monthParam }: { monthParam?: string }) {
+async function CalendarBody({
+  monthParam,
+  showTop,
+}: {
+  monthParam?: string;
+  showTop: boolean;
+}) {
   const ctx = await getClientPage();
   const error = ctx
     ? null
@@ -35,6 +43,18 @@ async function CalendarBody({ monthParam }: { monthParam?: string }) {
         {ctx?.page.name ?? "Your page"} · scheduled and published posts, ET
         time.
       </p>
+
+      {!error && !showTop && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-edge bg-card/60 p-4">
+          <p className="text-sm text-muted">
+            The calendar and recently published list below show scheduled
+            posts only. Load published posts from Facebook and Instagram to
+            see the full picture.
+          </p>
+          <ShowTopContentButton label="Show published posts" />
+        </div>
+      )}
+
       <div className="mt-4">
         <CalendarView
           page={ctx?.page ?? null}
@@ -42,13 +62,14 @@ async function CalendarBody({ monthParam }: { monthParam?: string }) {
           monthParam={monthParam}
           basePath="/calendar"
           readOnly
+          showTop={showTop}
         />
       </div>
 
       <hr className="mt-10 border-edge" />
 
       <div className="mt-8">
-        <PostsList page={ctx?.page ?? null} error={error} />
+        <PostsList page={ctx?.page ?? null} error={error} showTop={showTop} />
       </div>
     </>
   );

@@ -2,6 +2,7 @@ import { Heart, MessageCircle, Repeat2 } from "lucide-react";
 import { Suspense } from "react";
 import { InfoTip } from "@/components/InfoTip";
 import { PlatformIcon } from "@/components/PlatformIcon";
+import { ShowTopContentButton } from "@/components/ShowTopContentButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getOrganicStats } from "@/lib/data";
 import {
@@ -128,12 +129,15 @@ export default async function InsightsView({
   error: externalError,
   days,
   companyId,
+  showTop,
 }: {
   page: ManagedPage | null;
   error?: string | null;
   days: number;
   /** Needed to look up cached stats — omit to skip the stat cards/charts entirely. */
   companyId?: string;
+  /** Reveals the Top posts section (live Graph calls) — suppressed until the user asks for it. */
+  showTop: boolean;
 }) {
   let error: string | null = externalError ?? null;
   let fanCount: number | undefined;
@@ -304,11 +308,19 @@ export default async function InsightsView({
             Charts show daily values; totals are sums over the range.
           </p>
 
-          {page && (
-            <Suspense fallback={<TopPostsSkeleton />}>
-              <TopPostsSection page={page} />
-            </Suspense>
-          )}
+          {page &&
+            (showTop ? (
+              <Suspense fallback={<TopPostsSkeleton />}>
+                <TopPostsSection page={page} />
+              </Suspense>
+            ) : (
+              <div className="mt-8 rounded-lg border border-dashed border-edge bg-card/60 p-6 text-center">
+                <p className="mb-4 text-sm text-muted">
+                  Loads your top Facebook and Instagram posts by engagement, live from Meta.
+                </p>
+                <ShowTopContentButton label="Show top posts" />
+              </div>
+            ))}
         </>
       )}
     </div>

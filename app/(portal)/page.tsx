@@ -6,6 +6,7 @@ import { InfoTip } from "@/components/InfoTip";
 import { MiniLineChart, type SeriesPoint } from "@/components/MiniLineChart";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { RangeSelect } from "@/components/RangeSelect";
+import { ShowTopContentButton } from "@/components/ShowTopContentButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatTile } from "@/components/StatTile";
 import { getClientPage } from "@/lib/clientpage";
@@ -73,10 +74,11 @@ function sumOrganicRows(rows: OrganicStatsDaily[]) {
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; top?: string }>;
 }) {
-  const { range } = await searchParams;
+  const { range, top } = await searchParams;
   const rangeKey = range ?? "30d";
+  const showTop = Boolean(top);
 
   // Fast, Appwrite-only lookups — render the greeting immediately, then
   // stream in everything else (several Meta Graph API calls) below it.
@@ -101,7 +103,7 @@ export default async function OverviewPage({
       </header>
 
       <Suspense fallback={<OverviewBodySkeleton />}>
-        <OverviewBody session={session} company={company} rangeKey={rangeKey} />
+        <OverviewBody session={session} company={company} rangeKey={rangeKey} showTop={showTop} />
       </Suspense>
     </div>
   );
@@ -111,10 +113,12 @@ async function OverviewBody({
   session,
   company,
   rangeKey,
+  showTop,
 }: {
   session: ClientSession;
   company: Company;
   rangeKey: string;
+  showTop: boolean;
 }) {
   const { since, until } = rangeToDates(rangeKey);
   const prev = previousRange(since, until);
@@ -502,10 +506,18 @@ async function OverviewBody({
           <h2 className="font-display mb-4 text-lg font-semibold">Top performing content</h2>
           <p className="text-sm text-muted">{organicError}</p>
         </section>
-      ) : (
+      ) : showTop ? (
         <Suspense fallback={<TopPerformingSkeleton />}>
           <TopPerformingContent page={page} />
         </Suspense>
+      ) : (
+        <section className="mt-8 rounded-xl border border-dashed border-edge bg-card/60 p-4 text-center shadow-sm sm:p-6">
+          <h2 className="font-display mb-2 text-lg font-semibold">Top performing content</h2>
+          <p className="mb-4 text-sm text-muted">
+            Loads your top Facebook posts by engagement, live from Meta.
+          </p>
+          <ShowTopContentButton label="Show top performing content" />
+        </section>
       )}
     </>
   );

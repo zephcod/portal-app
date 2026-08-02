@@ -28,9 +28,12 @@ type Stat = { Icon: typeof Heart; value: number };
 export default async function PostsList({
   page,
   error: externalError,
+  showTop,
 }: {
   page: ManagedPage | null;
   error?: string | null;
+  /** Reveals Recently published (live Graph calls) — suppressed until the user asks for it. */
+  showTop: boolean;
 }) {
   let fbQueued: FbQueueItem[] = [];
   let igQueued: IgQueueItem[] = [];
@@ -178,9 +181,20 @@ export default async function PostsList({
             />
           )}
 
-          <Suspense fallback={<RecentlyPublishedSkeleton />}>
-            <RecentlyPublished page={page} error={error} />
-          </Suspense>
+          {showTop ? (
+            <Suspense fallback={<RecentlyPublishedSkeleton />}>
+              <RecentlyPublished page={page} error={error} />
+            </Suspense>
+          ) : (
+            <>
+              <h3 className="mt-10 font-mono text-xs font-semibold tracking-[0.14em] text-muted uppercase">
+                Recently published
+              </h3>
+              <p className="mt-3 text-sm text-muted">
+                Click &quot;Show published posts&quot; above to load this from Facebook and Instagram.
+              </p>
+            </>
+          )}
         </>
       )}
     </div>

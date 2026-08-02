@@ -64,12 +64,15 @@ export default async function CalendarView({
   monthParam,
   basePath,
   readOnly = false,
+  showTop,
 }: {
   page: ManagedPage | null;
   error?: string | null;
   monthParam?: string;
   basePath: string;
   readOnly?: boolean;
+  /** Reveals published posts (live Graph calls) — suppressed until the user asks for it. */
+  showTop: boolean;
 }) {
   // ── Month being viewed (default: current month in EAT) ──
   const todayYmd = eatYmd(new Date());
@@ -192,31 +195,42 @@ export default async function CalendarView({
         </span>
       </div>
 
-      <Suspense
-        fallback={
-          <CalendarGrid
+      {showTop ? (
+        <Suspense
+          fallback={
+            <CalendarGrid
+              cells={cells}
+              events={scheduledEvents}
+              todayYmd={todayYmd}
+              monthKey={monthKey}
+              readOnly={readOnly}
+            />
+          }
+        >
+          <PublishedOverlay
+            page={page}
+            error={error}
             cells={cells}
-            events={scheduledEvents}
-            todayYmd={todayYmd}
             monthKey={monthKey}
+            todayYmd={todayYmd}
             readOnly={readOnly}
+            scheduledEvents={scheduledEvents}
           />
-        }
-      >
-        <PublishedOverlay
-          page={page}
-          error={error}
+        </Suspense>
+      ) : (
+        <CalendarGrid
           cells={cells}
-          monthKey={monthKey}
+          events={scheduledEvents}
           todayYmd={todayYmd}
+          monthKey={monthKey}
           readOnly={readOnly}
-          scheduledEvents={scheduledEvents}
         />
-      </Suspense>
+      )}
 
       <p className="mt-3 font-mono text-[10px] text-muted">
-        Published history shows the 25 most recent posts per platform —
-        older days may look empty.
+        {showTop
+          ? "Published history shows the 25 most recent posts per platform — older days may look empty."
+          : "Showing scheduled posts only."}
         {!readOnly && " Hover a day and hit + to compose for it."}
       </p>
     </div>

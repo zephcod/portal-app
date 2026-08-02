@@ -10,11 +10,12 @@ export const dynamic = "force-dynamic";
 export default async function ClientInsightsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; top?: string }>;
 }) {
-  const { range } = await searchParams;
+  const { range, top } = await searchParams;
   const rangeKey = range ?? "30d";
   const days = RANGE_PRESETS.find((p) => p.key === rangeKey)?.days ?? 30;
+  const showTop = Boolean(top);
 
   return (
     <div>
@@ -23,13 +24,13 @@ export default async function ClientInsightsPage({
         <RangeSelect />
       </header>
       <Suspense fallback={<InsightsBodySkeleton />}>
-        <InsightsBody days={days} />
+        <InsightsBody days={days} showTop={showTop} />
       </Suspense>
     </div>
   );
 }
 
-async function InsightsBody({ days }: { days: number }) {
+async function InsightsBody({ days, showTop }: { days: number; showTop: boolean }) {
   const ctx = await getClientPage();
 
   return (
@@ -48,6 +49,7 @@ async function InsightsBody({ days }: { days: number }) {
           }
           days={days}
           companyId={ctx?.session.cid}
+          showTop={showTop}
         />
       </div>
     </>
