@@ -25,7 +25,7 @@ export type IgQueueItem = {
   /** Appwrite file id of a custom Reel cover image, if one was provided. */
   thumbRef?: string;
   scheduledAt: number; // unix seconds
-  status: "pending" | "publishing" | "published" | "failed";
+  status: "pending" | "approved" | "publishing" | "published" | "failed";
   error?: string;
   igMediaId?: string;
 };

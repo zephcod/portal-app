@@ -42,9 +42,9 @@ export default async function PostsList({
   if (!error && page) {
     if (fbQueueConfigured()) {
       try {
-        // Clients see only cleanly pending items — no failure internals.
+        // Clients see pending/approved/publishing items — no failure internals.
         fbQueued = (await listFbQueue(page.id)).filter(
-          (i) => i.status === "pending" || i.status === "publishing"
+          (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
         );
       } catch {
         // queue unreachable — IG upcoming still shown
@@ -53,7 +53,7 @@ export default async function PostsList({
     if (igQueueConfigured()) {
       try {
         igQueued = (await listIgQueue(page.id)).filter(
-          (i) => i.status === "pending" || i.status === "publishing"
+          (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
         );
       } catch {
         // queue unreachable — FB upcoming still shown

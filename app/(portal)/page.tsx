@@ -2,6 +2,7 @@ import { ArrowUpRight, CalendarDays, Heart, MessageCircle, Repeat2 } from "lucid
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { BudgetBalanceCard } from "@/components/BudgetBalanceCard";
 import { InfoTip } from "@/components/InfoTip";
 import { MiniLineChart, type SeriesPoint } from "@/components/MiniLineChart";
 import { PlatformIcon } from "@/components/PlatformIcon";
@@ -310,6 +311,8 @@ async function OverviewBody({
         />
       </section>
 
+      <BudgetBalanceCard companyId={session.cid} currency={cur} />
+
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
           <h2 className="font-display mb-4 text-lg font-semibold">Organic performance</h2>
@@ -615,6 +618,16 @@ function OverviewBodySkeleton() {
           </div>
         ))}
       </section>
+
+      <div className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+          <div>
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="mt-2 h-6 w-32" />
+          </div>
+        </div>
+      </div>
 
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">

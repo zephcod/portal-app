@@ -3,6 +3,7 @@ import type {
   Campaign,
   CampaignCost,
   Company,
+  CompanyDeposit,
   CostCategory,
   InsightDaily,
   Issue,
@@ -175,6 +176,13 @@ export async function getInsights(
   ]);
 }
 
+/** All-time insight rows for a company, no date bounds — used for lifetime ad-spend totals (account balance). */
+export async function getAllInsights(companyId: string): Promise<InsightDaily[]> {
+  return listAll<InsightDaily>(COLLECTIONS.insights, [
+    Query.equal("companyId", companyId),
+  ]);
+}
+
 // ── Organic (Page + IG) daily stats — synced nightly by the scheduler ──
 
 /**
@@ -262,6 +270,21 @@ export async function getCosts(
   until?: string
 ): Promise<CampaignCost[]> {
   return listAll<CampaignCost>(COLLECTIONS.costs, [
+    Query.equal("companyId", companyId),
+    ...(since ? [Query.greaterThanEqual("date", since)] : []),
+    ...(until ? [Query.lessThanEqual("date", until)] : []),
+    Query.orderDesc("date"),
+  ]);
+}
+
+// ── Deposits (account-balance ledger, per parent-campaign group) ──
+
+export async function getDeposits(
+  companyId: string,
+  since?: string,
+  until?: string
+): Promise<CompanyDeposit[]> {
+  return listAll<CompanyDeposit>(COLLECTIONS.deposits, [
     Query.equal("companyId", companyId),
     ...(since ? [Query.greaterThanEqual("date", since)] : []),
     ...(until ? [Query.lessThanEqual("date", until)] : []),

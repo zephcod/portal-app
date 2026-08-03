@@ -162,7 +162,7 @@ export default async function InsightsView({
       if (fbQueueConfigured()) {
         try {
           scheduledAhead += (await listFbQueue(page.id)).filter(
-            (i) => i.status === "pending" || i.status === "publishing"
+            (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
           ).length;
         } catch {
           // queue unreachable — IG count still shown
@@ -171,7 +171,7 @@ export default async function InsightsView({
       if (igQueueConfigured()) {
         try {
           scheduledAhead += (await listIgQueue(page.id)).filter(
-            (i) => i.status === "pending" || i.status === "publishing"
+            (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
           ).length;
         } catch {
           // queue unreachable — FB count still shown

@@ -133,11 +133,33 @@ export interface CampaignCost {
   $createdAt: string;
   companyId: string;
   metaCampaignId: string;
+  /** Parent-campaign group this cost is charged against; empty = "Other campaigns". */
+  parentCampaign?: string;
   category: CostCategory;
   description?: string;
   amount: number;
   /** YYYY-MM-DD */
   date: string;
+}
+
+/** Sentinel parent-campaign key for campaigns/deposits/costs with no group label. */
+export const OTHER_PARENT = "__other__";
+
+/**
+ * A running top-up logged against a company, optionally scoped to one of
+ * its parent-campaign groups (see `Campaign.parentCampaign`) — balance
+ * per group = deposits − lifetime ad spend − additional costs.
+ */
+export interface CompanyDeposit {
+  $id: string;
+  $createdAt: string;
+  companyId: string;
+  /** Parent-campaign group this funds; empty/unset = "Other campaigns". */
+  parentCampaign?: string;
+  amount: number;
+  /** YYYY-MM-DD */
+  date: string;
+  note?: string;
 }
 
 /** "approved" only applies to post comments (see postId below) — a client sign-off on a post. */

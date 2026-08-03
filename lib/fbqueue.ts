@@ -26,7 +26,7 @@ export type FbQueueItem = {
   /** JSON array of Appwrite file ids staged via the scheduler's uploadFbMedia. */
   mediaRefs?: string;
   scheduledAt: number; // unix seconds
-  status: "pending" | "publishing" | "published" | "failed";
+  status: "pending" | "approved" | "publishing" | "published" | "failed";
   error?: string;
   fbPostId?: string;
 };
