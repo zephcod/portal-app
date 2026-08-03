@@ -199,7 +199,7 @@ async function OverviewBody({
       if (igQueueConfigured()) {
         try {
           igQueueItems = (await listIgQueue(page.id)).filter(
-            (i) => i.status === "pending" || i.status === "publishing"
+            (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
           );
         } catch {
           // queue unreachable — FB upcoming content still shown
@@ -209,7 +209,7 @@ async function OverviewBody({
       if (fbQueueConfigured()) {
         try {
           fbQueueItems = (await listFbQueue(page.id)).filter(
-            (i) => i.status === "pending" || i.status === "publishing"
+            (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
           );
         } catch {
           // queue unreachable — FB upcoming content still shown
