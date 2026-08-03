@@ -2,13 +2,21 @@ import { HandCoins } from "lucide-react";
 import { computeCompanyBalance } from "@/lib/balance";
 import { money } from "@/lib/domain";
 
-type Status = "owing" | "credit" | "settled";
+type Status = "owing" | "low" | "credit" | "settled";
+
+/** Balances above 0 but at or under this are flagged amber, not green — running low. */
+const LOW_BALANCE_THRESHOLD = 2000;
 
 const STATUS_STYLE: Record<Status, { badge: string; amountColor: string; label: string }> = {
   owing: {
     badge: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
     amountColor: "text-red-600 dark:text-red-400",
     label: "Due marketing credit",
+  },
+  low: {
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+    amountColor: "text-amber-600 dark:text-amber-400",
+    label: "Low marketing budget",
   },
   credit: {
     badge: "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-300",
@@ -24,8 +32,9 @@ const STATUS_STYLE: Record<Status, { badge: string; amountColor: string; label: 
 
 const STATUS_MESSAGE: Record<Status, string> = {
   owing: "Please contact your Awaj account manager and add funds to avoid campaign interruptions.",
+  low: "Your marketing budget is running low. Contact your Awaj account manager.",
   credit: "Funds available for upcoming campaigns.",
-  settled: "Your account is fully settled — no balance owing.",
+  settled: "No outstanding balance. Your account is fully settled.",
 };
 
 /**
@@ -45,7 +54,14 @@ export async function BudgetBalanceCard({
   const balance = await computeCompanyBalance(companyId);
   const total = balance.total;
   // Ignore sub-unit rounding dust so a balance that nets to ~0 reads as "Settled".
-  const status: Status = total < -0.5 ? "owing" : total > 0.5 ? "credit" : "settled";
+  const status: Status =
+    total < -0.5
+      ? "owing"
+      : total <= 0.5
+        ? "settled"
+        : total <= LOW_BALANCE_THRESHOLD
+          ? "low"
+          : "credit";
   const { badge, amountColor, label } = STATUS_STYLE[status];
 
   // Only worth breaking down when more than one group actually carries a balance.

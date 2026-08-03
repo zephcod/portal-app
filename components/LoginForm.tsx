@@ -1,5 +1,7 @@
 "use client";
 
+import { Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { login } from "@/app/login/actions";
 
@@ -30,6 +32,7 @@ function Spinner() {
 
 function Fields({ error }: { error?: string }) {
   const { pending } = useFormStatus();
+  const [visible, setVisible] = useState(false);
 
   return (
     <fieldset disabled={pending} className="contents">
@@ -37,13 +40,29 @@ function Fields({ error }: { error?: string }) {
         <span className="font-mono text-[11px] tracking-[0.12em] text-white/60 uppercase">
           Client PIN
         </span>
-        <input
-          type="password"
-          name="password"
-          required
-          autoFocus
-          className="rounded-md border border-white/15 bg-navy px-3 py-2.5 text-sm text-white focus:outline-2 focus:outline-gold disabled:opacity-60"
-        />
+        <div className="relative">
+          <input
+            type={visible ? "text" : "password"}
+            name="password"
+            required
+            autoFocus
+            className="w-full rounded-md border border-white/15 bg-navy px-3 py-2.5 pr-10 text-sm text-white focus:outline-2 focus:outline-gold disabled:opacity-60"
+          />
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            disabled={pending}
+            aria-label={visible ? "Hide PIN" : "Show PIN"}
+            aria-pressed={visible}
+            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-white/40 transition-colors hover:text-white disabled:pointer-events-none disabled:opacity-60"
+          >
+            {visible ? (
+              <EyeOff className="h-4 w-4" aria-hidden />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden />
+            )}
+          </button>
+        </div>
         <span className="font-mono text-[10px] leading-relaxed text-white/30">
           Use the PIN provided by your account manager.
         </span>

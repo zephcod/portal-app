@@ -14,6 +14,16 @@ import type { ManagedPage } from "@/lib/pages";
 import { mediaUrl } from "@/lib/storage";
 
 type Stat = { Icon: typeof Heart; value: number };
+type Badge = { Icon: typeof LayoutGrid; label: string };
+type UpcomingItem = {
+  key: string;
+  href: string;
+  when: number;
+  platform: "fb" | "ig";
+  text: string;
+  image?: string;
+  badge?: Badge;
+};
 
 /**
  * Upcoming (Facebook + IG queued) and recently published posts for one
@@ -114,6 +124,9 @@ export default async function PostsList({
     })),
   ].sort((a, b) => a.when - b.when);
 
+  const fbUpcoming = upcoming.filter((u) => u.platform === "fb");
+  const igUpcoming = upcoming.filter((u) => u.platform === "ig");
+
   return (
     <div>
       <h2 className="font-display text-2xl font-bold">Your content plan</h2>
@@ -140,45 +153,10 @@ export default async function PostsList({
               </p>
             </div>
           ) : (
-            <LoadMoreList
-              pageSize={6}
-              items={upcoming.map((u) => (
-                <li key={u.key}>
-                  <Link
-                    href={u.href}
-                    className="block rounded-lg border border-edge bg-card p-4 shadow-sm transition-colors hover:border-gold"
-                  >
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="font-mono text-xs font-semibold text-amber">
-                        {fmtDateTime(u.when)} EAT
-                      </span>
-                      <span className="font-mono text-[10px] text-muted">
-                        {relativeFromNow(u.when)}
-                      </span>
-                      <span className="inline-flex items-center gap-1 font-mono text-[10px] text-muted">
-                        <PlatformIcon platform={u.platform} /> {u.platformLabel}
-                      </span>
-                      {u.badge && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-navy/5 px-2 py-0.5 font-mono text-[10px] text-muted">
-                          <u.badge.Icon className="h-3 w-3" /> {u.badge.label}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-2 flex gap-4">
-                      {u.image && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={u.image}
-                          alt=""
-                          className="h-20 w-20 shrink-0 rounded-md border border-edge object-cover"
-                        />
-                      )}
-                      <p className="text-sm whitespace-pre-wrap">{u.text}</p>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            />
+            <>
+              <UpcomingGroup platform="fb" label="Facebook" items={fbUpcoming} />
+              <UpcomingGroup platform="ig" label="Instagram" items={igUpcoming} />
+            </>
           )}
 
           {showTop ? (
@@ -197,6 +175,68 @@ export default async function PostsList({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/** One platform's slice of "Upcoming" — its own heading, count, and grid. */
+function UpcomingGroup({
+  platform,
+  label,
+  items,
+}: {
+  platform: "fb" | "ig";
+  label: string;
+  items: UpcomingItem[];
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mt-6 first:mt-3">
+      <h4 className="flex items-center gap-1.5 font-mono text-[11px] font-semibold tracking-[0.1em] text-muted uppercase">
+        <PlatformIcon platform={platform} /> {label} ({items.length})
+      </h4>
+      <LoadMoreList
+        pageSize={4}
+        className="mt-2 grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4"
+        items={items.map((u) => (
+          <li key={u.key} className="min-w-0">
+            <Link
+              href={u.href}
+              className="block overflow-hidden rounded-lg border border-edge bg-card shadow-sm transition-colors hover:border-gold"
+            >
+              <div className="relative aspect-[4/5] w-full bg-app">
+                {u.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={u.image} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <PlatformIcon platform={u.platform} className="h-6 w-6 text-muted" />
+                  </div>
+                )}
+                {u.badge && (
+                  <span
+                    title={u.badge.label}
+                    className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-navy/70 text-white backdrop-blur-sm"
+                  >
+                    <u.badge.Icon className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </div>
+              <div className="p-3">
+                <div
+                  className="flex items-center gap-1.5 font-mono text-[10px] text-muted"
+                  title={relativeFromNow(u.when)}
+                >
+                  <PlatformIcon platform={u.platform} />
+                  <span className="min-w-0 truncate">{fmtDateTime(u.when).slice(0, 6)}</span>
+                </div>
+                <p className="mt-1.5 line-clamp-2 text-sm">{u.text}</p>
+              </div>
+            </Link>
+          </li>
+        ))}
+      />
     </div>
   );
 }
