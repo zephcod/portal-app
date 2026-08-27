@@ -292,6 +292,27 @@ export async function getDeposits(
   ]);
 }
 
+/**
+ * Accepts an optional explicit document id (default ID.unique()) — used by
+ * the Chapa top-up flow to derive a deposit's $id deterministically from
+ * its payment's tx_ref, making the credit step race-safe via Appwrite's
+ * own document-uniqueness constraint instead of a separate lock.
+ */
+export async function createDeposit(
+  data: {
+    companyId: string;
+    parentCampaign?: string;
+    amount: number;
+    date: string;
+    note?: string;
+  },
+  id: string = ID.unique()
+): Promise<CompanyDeposit> {
+  return (await withRetry(() =>
+    db().createDocument(DB(), COLLECTIONS.deposits, id, data)
+  )) as unknown as CompanyDeposit;
+}
+
 export async function createCost(data: {
   companyId: string;
   metaCampaignId: string;

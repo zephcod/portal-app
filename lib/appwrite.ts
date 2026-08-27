@@ -12,6 +12,7 @@ export const COLLECTIONS = {
   costs: "campaign_costs",
   organicStats: "organic_stats_daily",
   deposits: "company_deposits",
+  chapaPayments: "chapa_payments",
 } as const;
 
 let _db: Databases | null = null;

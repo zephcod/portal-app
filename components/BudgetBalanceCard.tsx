@@ -1,4 +1,5 @@
 import { HandCoins } from "lucide-react";
+import { AddBudgetButton } from "@/components/AddBudgetButton";
 import { computeCompanyBalance } from "@/lib/balance";
 import { money } from "@/lib/domain";
 
@@ -33,7 +34,7 @@ const STATUS_STYLE: Record<Status, { badge: string; amountColor: string; label: 
 const STATUS_MESSAGE: Record<Status, string> = {
   owing: "Please contact your Awaj account manager and add funds to avoid campaign interruptions.",
   low: "Your marketing budget is running low. Contact your Awaj account manager.",
-  credit: "Funds available for upcoming campaigns.",
+  credit: "Recent campaign transactions.",
   settled: "No outstanding balance. Your account is fully settled.",
 };
 
@@ -70,7 +71,8 @@ export async function BudgetBalanceCard({
   return (
     <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex flex-wrap min-w-0 items-center gap-3">
+          <AddBudgetButton />
           <span
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${badge}`}
           >
@@ -85,7 +87,9 @@ export async function BudgetBalanceCard({
             </p>
           </div>
         </div>
-        <p className="max-w-sm min-w-0 text-sm text-muted">{STATUS_MESSAGE[status]}</p>
+        <div className="flex shrink-0 items-center gap-3">
+          <p className="max-w-sm min-w-0 text-sm text-muted">{STATUS_MESSAGE[status]}</p>
+        </div>
       </div>
 
       {groupBreakdown.length > 1 && (

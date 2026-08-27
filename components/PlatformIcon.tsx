@@ -1,25 +1,43 @@
-import { FacebookGlyph, InstagramGlyph, LinkedInGlyph } from "@/components/icons/BrandGlyphs";
+import {
+  FacebookGlyph,
+  InstagramGlyph,
+  LinkedInGlyph,
+  TikTokGlyph,
+  WebGlyph,
+  YouTubeGlyph,
+} from "@/components/icons/BrandGlyphs";
+
+const GLYPHS = {
+  fb: FacebookGlyph,
+  ig: InstagramGlyph,
+  li: LinkedInGlyph,
+  tt: TikTokGlyph,
+  yt: YouTubeGlyph,
+  web: WebGlyph,
+} as const;
+
+export type Platform = keyof typeof GLYPHS;
 
 /**
- * Facebook/Instagram/LinkedIn glyph, inline with surrounding text. Uses
- * the full-color brand marks ported from the marketing site (see
+ * Platform glyph, inline with surrounding text. Uses the full-color
+ * brand marks ported from the marketing site (see
  * components/icons/BrandGlyphs.tsx) so the Content Hub, dashboard, and
  * post-detail pages match the Social Platform Manager app's icon set
  * instead of the generic react-icons/si outline glyphs.
  *
- * "li" is wired here ahead of any actual LinkedIn data reaching this
- * app — Social Platform Manager owns posting/queueing (see its lib/linkedin.ts),
- * and portal-app's data layer (lib/data.ts) doesn't source LinkedIn
- * posts or insights yet. This just means the icon is ready once it does.
+ * "li"/"tt"/"yt"/"web" are wired here ahead of any actual data for
+ * those platforms reaching this app — portal-app's data layer
+ * (lib/data.ts) doesn't source their posts or insights yet. This just
+ * means the icon is ready once it does; see CalendarView.tsx's legend
+ * for where they're previewed as upcoming platforms.
  */
 export function PlatformIcon({
   platform,
   className = "h-3 w-3",
 }: {
-  platform: "fb" | "ig" | "li";
+  platform: Platform;
   className?: string;
 }) {
-  const Icon =
-    platform === "fb" ? FacebookGlyph : platform === "ig" ? InstagramGlyph : LinkedInGlyph;
+  const Icon = GLYPHS[platform];
   return <Icon className={`inline shrink-0 ${className}`} aria-hidden />;
 }

@@ -10,6 +10,7 @@ import { RangeSelect } from "@/components/RangeSelect";
 import { ShowTopContentButton } from "@/components/ShowTopContentButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatTile } from "@/components/StatTile";
+import { TopUpModal } from "@/components/TopUpModal";
 import { getClientPage } from "@/lib/clientpage";
 import {
   getCampaigns,
@@ -102,6 +103,8 @@ export default async function OverviewPage({
         </div>
         <RangeSelect />
       </header>
+
+      <TopUpModal currency={company.currency || "ETB"} />
 
       <Suspense fallback={<OverviewBodySkeleton />}>
         <OverviewBody session={session} company={company} rangeKey={rangeKey} showTop={showTop} />

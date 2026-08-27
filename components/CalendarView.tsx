@@ -193,6 +193,20 @@ export default async function CalendarView({
         <span className="inline-flex items-center gap-1">
           <PlatformIcon platform="ig" /> Instagram
         </span>
+        {/* Previewed ahead of real data — dimmed to read as "coming soon",
+            not yet reflected in the grid below. */}
+        <span className="inline-flex items-center gap-1 " title="Coming soon">
+          <PlatformIcon platform="tt" /> TikTok
+        </span>
+        <span className="inline-flex items-center gap-1 " title="Coming soon">
+          <PlatformIcon platform="li" /> LinkedIn
+        </span>
+        <span className="inline-flex items-center gap-1 " title="Coming soon">
+          <PlatformIcon platform="yt" /> YouTube
+        </span>
+        <span className="inline-flex items-center gap-1 " title="Coming soon">
+          <PlatformIcon platform="web" /> Blog
+        </span>
       </div>
 
       {showTop ? (

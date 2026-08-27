@@ -18,6 +18,6 @@ export const config = {
   // awaj-mark.svg on the login screen itself, requested before a
   // session cookie exists).
   matcher: [
-    "/((?!login|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpe?g|gif|webp|ico)$).*)",
+    "/((?!login|api/payment/webhook|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpe?g|gif|webp|ico)$).*)",
   ],
 };

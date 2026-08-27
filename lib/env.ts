@@ -28,6 +28,17 @@ export const env = {
   databaseId: () => req("APPWRITE_DATABASE_ID"),
   // Alias used by libs shared with the scheduler app.
   appwriteDatabaseId: () => req("APPWRITE_DATABASE_ID"),
+
+  // ── Chapa payment gateway (marketing budget top-ups) — required ──
+  chapaSecretKey: () => req("CHAPA_SECRET_KEY"),
+  chapaWebhookSecret: () => req("CHAPA_WEBHOOK_SECRET"),
+  chapaMode: (): "test" | "live" => {
+    const v = (process.env.CHAPA_MODE ?? "").toLowerCase();
+    if (v !== "test" && v !== "live") {
+      throw new Error('Missing/invalid CHAPA_MODE env var (expected "test" or "live")');
+    }
+    return v;
+  },
 };
 
 export function fbConfigured(): boolean {

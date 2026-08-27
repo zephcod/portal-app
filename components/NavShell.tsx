@@ -39,7 +39,7 @@ function Brand({ subtitle, homeHref }: { subtitle: string; homeHref?: string }) 
       <div className="flex items-center gap-2">
         <AwajMark className="h-7 w-7 shrink-0" aria-hidden />
         <p className="font-display text-xl font-bold tracking-tight">
-          Awaj<span className="text-gold"> ET</span>
+          Awaj<span className="text-gold"> CMS</span>
         </p>
       </div>
       <p className="mt-1 font-mono text-[10px] tracking-[0.18em] text-white/40 uppercase">
@@ -221,12 +221,12 @@ export function DrawerNav({
           className="flex shrink-0 items-center gap-1.5 font-display text-lg font-bold text-white transition-opacity hover:opacity-80"
         >
           <AwajMark className="h-6 w-6" aria-hidden />
-          Awaj<span className="text-gold"> ET</span>
+          Awaj<span className="text-gold"> CMS</span>
         </Link>
       ) : (
         <span className="flex shrink-0 items-center gap-1.5 font-display text-lg font-bold text-white">
           <AwajMark className="h-6 w-6" aria-hidden />
-          Awaj<span className="text-gold"> ET</span>
+          Awaj<span className="text-gold"> CMS</span>
         </span>
       )}
     </header>
