@@ -14,7 +14,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Awaj ET — Client Portal",
+  title: "Awaj ET Client Portal",
   description: "Campaign reports, content plan, and insights for Awaj ET clients",
 };
 

@@ -39,6 +39,8 @@ export interface CompanyBalanceGroup {
   adSpend: number;
   costs: number;
   balance: number;
+  /** Most recent deposit/cost date (YYYY-MM-DD) touching this group, or "" if neither ever has. */
+  lastActivity: string;
 }
 
 export interface CompanyBalance {
@@ -77,12 +79,14 @@ export async function computeCompanyBalance(companyId: string): Promise<CompanyB
     const adSpend = allInsights
       .filter((r) => campaignIds.has(r.metaCampaignId))
       .reduce((n, r) => n + r.spend * multiplier, 0);
-    const costs = allCosts
-      .filter((c) => costGroupKey(c, campaigns) === key)
-      .reduce((n, c) => n + c.amount, 0);
-    const deposits = allDeposits
-      .filter((d) => groupOf(d.parentCampaign) === key)
-      .reduce((n, d) => n + d.amount, 0);
+    const groupCosts = allCosts.filter((c) => costGroupKey(c, campaigns) === key);
+    const costs = groupCosts.reduce((n, c) => n + c.amount, 0);
+    const groupDeposits = allDeposits.filter((d) => groupOf(d.parentCampaign) === key);
+    const deposits = groupDeposits.reduce((n, d) => n + d.amount, 0);
+    const lastActivity = [...groupDeposits, ...groupCosts].reduce(
+      (max, r) => (r.date > max ? r.date : max),
+      ""
+    );
     return {
       parentKey: key,
       parentLabel: key === OTHER_PARENT ? "Other campaigns" : key,
@@ -90,8 +94,13 @@ export async function computeCompanyBalance(companyId: string): Promise<CompanyB
       adSpend,
       costs,
       balance: deposits - adSpend - costs,
+      lastActivity,
     };
   });
+
+  // Most recently active group first; groups with no dated deposit/cost
+  // (ad-spend-only) sort last.
+  byGroup.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
 
   return { total: byGroup.reduce((n, g) => n + g.balance, 0), byGroup };
 }

@@ -14,6 +14,8 @@ import { AppwriteException } from "node-appwrite";
 import { env } from "./env";
 import { createDeposit, getCompany } from "./data";
 import { COLLECTIONS, db, DB, withRetry } from "./appwrite";
+import { money } from "./domain";
+import { notifyTopUp } from "./telegram";
 import type { VerifyTransactionResult } from "./chapa";
 
 export type ChapaPaymentStatus = "pending" | "success" | "failed";
@@ -129,5 +131,16 @@ export async function fulfillPayment(verified: VerifyTransactionResult): Promise
   }
 
   await markPaymentStatus(payment.$id, "success", verified.chapaReference);
+
+  // Best-effort — a Telegram outage must not affect the credit itself,
+  // and this only runs once per payment (the race's loser returns
+  // "already-credited" above before ever reaching here).
+  await notifyTopUp({
+    companyName: company.name,
+    amountLabel: money(payment.amount, payment.currency),
+    reason: payment.note?.trim() || "(no reason given)",
+    txRef: payment.$id,
+  });
+
   return "credited";
 }

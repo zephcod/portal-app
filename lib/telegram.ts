@@ -64,6 +64,22 @@ export async function notifyNewIssue(opts: {
   );
 }
 
+/** Successful top-up notification (fires once, at the moment a payment is credited). */
+export async function notifyTopUp(opts: {
+  companyName: string;
+  amountLabel: string;
+  reason: string;
+  txRef: string;
+}): Promise<void> {
+  await sendTelegram(
+    `💰 <b>Marketing budget top-up</b>\n` +
+      `<b>${esc(opts.companyName)}</b>\n\n` +
+      `<b>${esc(opts.amountLabel)}</b>\n` +
+      `${esc(opts.reason)}\n\n` +
+      `<i>tx_ref: ${esc(opts.txRef)}</i>`
+  );
+}
+
 /** New-post-comment notification. */
 export async function notifyNewPostComment(opts: {
   companyName: string;

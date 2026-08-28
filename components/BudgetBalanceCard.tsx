@@ -1,5 +1,6 @@
 import { HandCoins } from "lucide-react";
 import { AddBudgetButton } from "@/components/AddBudgetButton";
+import { LoadMoreList } from "@/components/LoadMoreList";
 import { computeCompanyBalance } from "@/lib/balance";
 import { money } from "@/lib/domain";
 
@@ -93,8 +94,11 @@ export async function BudgetBalanceCard({
       </div>
 
       {groupBreakdown.length > 1 && (
-        <ul className="mt-4 flex min-w-0 flex-col gap-1.5 border-t border-edge pt-3 text-sm">
-          {groupBreakdown.map((g) => (
+        <LoadMoreList
+          pageSize={3}
+          compact
+          className="mt-4 flex min-w-0 flex-col gap-1.5 border-t border-edge pt-3 text-sm"
+          items={groupBreakdown.map((g) => (
             <li key={g.parentKey} className="flex min-w-0 items-center justify-between gap-3">
               <span className="min-w-0 flex-1 truncate text-muted">{g.parentLabel}</span>
               <span
@@ -109,7 +113,7 @@ export async function BudgetBalanceCard({
               </span>
             </li>
           ))}
-        </ul>
+        />
       )}
     </section>
   );
