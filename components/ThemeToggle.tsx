@@ -4,9 +4,9 @@ import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
- * Light/dark toggle for the main content area. Lives in the (always-navy)
- * sidebar/drawer chrome, so it's styled to match the other chrome controls
- * (Sign out, etc.) regardless of which theme is active.
+ * Light/dark toggle for the main content area. Lives in the sidebar/drawer
+ * chrome, styled to match the other chrome controls (Sign out, etc.) using
+ * the same theme-responsive tokens as the rest of the nav.
  *
  * Entirely client-side: flips the `.dark` class on <html> and remembers
  * the choice in localStorage. No cookie, no API route — so there's nothing
@@ -43,7 +43,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       onClick={toggle}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
       title={dark ? "Switch to light mode" : "Switch to dark mode"}
-      className={`rounded-md p-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white ${className}`}
+      className={`rounded-md p-1 text-muted transition-colors hover:bg-app hover:text-fg ${className}`}
     >
       {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </button>
