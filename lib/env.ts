@@ -9,14 +9,9 @@ export const env = {
   appUrl: () => (process.env.APP_URL ?? "").replace(/\/+$/, ""),
 
   // ── Meta Graph API (social pages) ──
+  // Which pages are in scope is derived live from each company's
+  // fbPageId in Appwrite (see lib/pages.ts) — no id list here.
   systemToken: () => process.env.FB_SYSTEM_USER_TOKEN ?? "",
-  pageIds: (): string[] => {
-    const raw = process.env.FB_PAGE_IDS ?? process.env.FB_PAGE_ID ?? "";
-    return raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  },
   legacyPageId: () => process.env.FB_PAGE_ID ?? "",
   legacyPageToken: () => process.env.FB_PAGE_ACCESS_TOKEN ?? "",
   graphVersion: () => process.env.FB_GRAPH_VERSION ?? "v23.0",
@@ -40,12 +35,6 @@ export const env = {
     return v;
   },
 };
-
-export function fbConfigured(): boolean {
-  const multi = Boolean(env.systemToken()) && env.pageIds().length > 0;
-  const legacy = Boolean(env.legacyPageId() && env.legacyPageToken());
-  return multi || legacy;
-}
 
 /** IG queue shares the Appwrite database, which the portal requires anyway. */
 export function igQueueConfigured(): boolean {

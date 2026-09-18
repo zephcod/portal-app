@@ -15,6 +15,15 @@ export interface Company {
   sourceCompany?: string;
   /** Shown in the client report footer: "Prepared by {accountManager} · Awaj ET". */
   accountManager?: string;
+  /**
+   * Meta Facebook Page this company is linked to. Drives the portal's
+   * Posts/Calendar/Insights sections and is baked into the client's
+   * login session (see app/login/actions.ts). Also the single source
+   * of truth for which pages lib/pages.ts is allowed to fetch — see
+   * that file's companyPageIds(). Optional: companies without it just
+   * show a "not linked" notice for social features.
+   */
+  fbPageId?: string;
   currency: string;
   /**
    * Multiplier applied to Meta spend when displayed on the client report

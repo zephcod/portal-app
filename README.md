@@ -19,13 +19,17 @@ as the reports app** (`companies` collection, shared Appwrite database);
 the session is an HMAC-signed cookie scoped to their company + FB page
 (`fbPageId` attribute on the company doc — see the scheduler's
 `setup-client-portal.mjs`). Companies without `fbPageId` can still use
-Dashboard and Issues; the social pages show a "not linked" notice.
+Dashboard and Issues; the social pages show a "not linked" notice. This
+`fbPageId` field is also the sole source of truth for which Facebook
+Pages the app is allowed to fetch (see `lib/pages.ts`); there's no
+separate page-id allowlist to keep in sync.
 
 ## Setup
 
 ```bash
 cp .env.example .env   # Appwrite (required), AUTH_SECRET (required),
-                       # FB_SYSTEM_USER_TOKEN + FB_PAGE_IDS (social pages)
+                       # FB_SYSTEM_USER_TOKEN (social pages — page ids
+                       # come from each company's fbPageId in Appwrite)
 npm install
 npm run dev            # http://localhost:3002
 ```
