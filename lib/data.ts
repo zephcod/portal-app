@@ -246,6 +246,7 @@ export async function upsertInsight(
         clicks: row.clicks,
         leads: row.leads,
         calls: row.calls ?? 0,
+        messages: row.messages ?? 0,
         results: row.results ?? row.leads + (row.calls ?? 0),
         edited: row.edited ?? false,
         ...(row.notes !== undefined ? { notes: row.notes } : {}),
@@ -405,6 +406,7 @@ export async function updateInsight(
       | "clicks"
       | "leads"
       | "calls"
+      | "messages"
       | "results"
       | "notes"
     >

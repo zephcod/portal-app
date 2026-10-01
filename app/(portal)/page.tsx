@@ -282,12 +282,12 @@ async function OverviewBody({
     <>
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
-          label="Reach"
+          label="IG reach"
           value={num(reachTotal)}
           delta={reachDelta}
           periodLabel={periodLabel}
           unavailable={!organicError && statsNotSynced ? "Not synced yet" : undefined}
-          tip="Unique accounts reached — Instagram only for now. Meta retired page-level reach reporting for Facebook Pages."
+          tip="Unique accounts reached ~ Instagram only for now. Meta retired page-level reach reporting for Facebook Pages."
         />
         <StatTile
           label="Page views"
@@ -346,7 +346,7 @@ async function OverviewBody({
                   value: num(adTotals.leads),
                   delta: leadsDelta,
                   goodDir: "up" as const,
-                  tip: undefined as string | undefined,
+                  tip: "Lead-form submissions, calls placed and messaging conversations started, combined.",
                 },
                 {
                   label: "CPL",
@@ -356,7 +356,7 @@ async function OverviewBody({
                       ? pctChange(adTotals.cpl, adTotalsPrev.cpl)
                       : null,
                   goodDir: "down" as const,
-                  tip: "Ad spend divided by number of leads generated — lower is better.",
+                  tip: "Ad spend divided by leads (forms + calls + messages) ~ lower is better.",
                 },
                 {
                   label: "CPR",
@@ -366,7 +366,7 @@ async function OverviewBody({
                       ? pctChange(adTotals.cpr, adTotalsPrev.cpr)
                       : null,
                   goodDir: "down" as const,
-                  tip: "Ad spend divided by total results (leads + calls) — lower is better.",
+                  tip: "Ad spend divided by all results (leads, calls, messages, follows and engagement) ~ lower is better.",
                 },
               ] satisfies {
                 label: string;

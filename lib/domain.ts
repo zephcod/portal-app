@@ -72,6 +72,8 @@ export interface InsightDaily {
   leads: number;
   /** Calls placed (click-to-call). Optional: older rows predate this field. */
   calls?: number;
+  /** Messaging conversations started. Optional: older rows predate this field. */
+  messages?: number;
   /**
    * Total results = leads + calls + page follows + engagement + messaging
    * conversations started. Synced from Meta; optional for older rows.
@@ -207,17 +209,27 @@ export interface MetricTotals {
   impressions: number;
   reach: number;
   clicks: number;
+  /** Combined leads = lead-form submissions + calls + messaging conversations. */
   leads: number;
+  /** Lead-form submissions only (the raw synced `leads` field). */
+  formLeads: number;
   calls: number;
-  /** Total results = leads + calls. */
+  messages: number;
+  /** Total results = leads + calls + follows + engagement + messaging (as synced). */
   results: number;
   ctr: number; // %
   cpc: number;
+  /** Cost per combined lead. */
   cpl: number;
   /** Cost per call placed. */
   costPerCall: number;
-  /** Cost per result = spend / (leads + calls). */
+  /** Cost per result = spend / results. */
   cpr: number;
+}
+
+/** One row's combined leads: lead-form submissions + calls + messaging conversations. */
+export function rowLeads(r: InsightDaily): number {
+  return r.leads + (r.calls ?? 0) + (r.messages ?? 0);
 }
 
 export function computeTotals(rows: InsightDaily[]): MetricTotals {
@@ -227,13 +239,25 @@ export function computeTotals(rows: InsightDaily[]): MetricTotals {
       acc.impressions += r.impressions;
       acc.reach += r.reach;
       acc.clicks += r.clicks;
-      acc.leads += r.leads;
+      acc.leads += rowLeads(r);
+      acc.formLeads += r.leads;
       acc.calls += r.calls ?? 0;
+      acc.messages += r.messages ?? 0;
       // Fall back to leads + calls for rows synced before `results` existed.
       acc.results += r.results ?? r.leads + (r.calls ?? 0);
       return acc;
     },
-    { spend: 0, impressions: 0, reach: 0, clicks: 0, leads: 0, calls: 0, results: 0 }
+    {
+      spend: 0,
+      impressions: 0,
+      reach: 0,
+      clicks: 0,
+      leads: 0,
+      formLeads: 0,
+      calls: 0,
+      messages: 0,
+      results: 0,
+    }
   );
   const results = t.results;
   return {

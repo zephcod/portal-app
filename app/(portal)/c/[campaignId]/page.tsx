@@ -16,6 +16,7 @@ import {
   previousRange,
   RANGE_PRESETS,
   rangeToDates,
+  rowLeads,
 } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,7 @@ export default async function CampaignDetailPage({
   const cur = company.currency || "ETB";
 
   const trend: TrendPoint[] = rows
-    .map((r) => ({ date: r.date, spend: r.spend, clicks: r.clicks, leads: r.leads }))
+    .map((r) => ({ date: r.date, spend: r.spend, clicks: r.clicks, leads: rowLeads(r) }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   return (
@@ -125,8 +126,10 @@ export default async function CampaignDetailPage({
         <MetricCard
           label="Leads"
           value={num(totals.leads)}
+          sub={`${num(totals.formLeads)} forms · ${num(totals.calls)} calls · ${num(totals.messages)} msgs`}
           delta={pctChange(totals.leads, prevTotals.leads)}
           periodLabel={periodLabel}
+          tip="Lead-form submissions, calls placed and messaging conversations started, combined."
         />
         <MetricCard
           label="Cost per lead"
@@ -134,7 +137,7 @@ export default async function CampaignDetailPage({
           delta={totals.leads && prevTotals.leads ? pctChange(totals.cpl, prevTotals.cpl) : undefined}
           periodLabel={periodLabel}
           deltaGoodDirection="down"
-          tip="Ad spend divided by number of leads generated — lower is better."
+          tip="Ad spend divided by leads (forms + calls + messages) ~ lower is better."
         />
         <MetricCard label="Services" value={money(costTotal, cur)} />
         <MetricCard label="Total investment" value={money(totalInvestment, cur)} />
@@ -151,7 +154,7 @@ export default async function CampaignDetailPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-edge text-left text-xs uppercase tracking-wide text-muted">
-                {["Date", "Spend", "Impressions", "Reach", "Clicks", "Leads", "Calls", "CPR"].map(
+                {["Date", "Spend", "Impressions", "Reach", "Clicks", "Leads", "Calls", "Messages", "CPR"].map(
                   (h) => (
                     <th key={h} className="px-4 py-3 font-medium sm:px-6">
                       {h}
@@ -163,7 +166,7 @@ export default async function CampaignDetailPage({
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-muted">
+                  <td colSpan={9} className="px-6 py-8 text-center text-muted">
                     No data for this period yet.
                   </td>
                 </tr>
@@ -177,8 +180,9 @@ export default async function CampaignDetailPage({
                     <td className="px-4 py-3 sm:px-6">{num(r.impressions)}</td>
                     <td className="px-4 py-3 sm:px-6">{num(r.reach)}</td>
                     <td className="px-4 py-3 sm:px-6">{num(r.clicks)}</td>
-                    <td className="px-4 py-3 sm:px-6">{num(r.leads)}</td>
+                    <td className="px-4 py-3 sm:px-6">{num(rowLeads(r))}</td>
                     <td className="px-4 py-3 sm:px-6">{num(r.calls ?? 0)}</td>
+                    <td className="px-4 py-3 sm:px-6">{num(r.messages ?? 0)}</td>
                     <td className="px-4 py-3 sm:px-6">
                       {(() => {
                         const res = r.results ?? r.leads + (r.calls ?? 0);

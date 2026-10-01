@@ -263,7 +263,7 @@ export default async function InsightsView({
                 label={`FB page views (${days}d)`}
                 value={fbPageViews.total.toLocaleString()}
                 delta={fbPageViewsDelta}
-                tip="Meta retired page-level reach for most Pages — this is the closest metric it still reports: how many times people visited your Facebook Page."
+                tip="Meta retired page-level reach for most Pages ~ this is the closest metric it still reports: how many times people visited your Facebook Page."
               />
             )}
             {igReach && (

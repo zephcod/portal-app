@@ -16,6 +16,7 @@ import {
   previousRange,
   RANGE_PRESETS,
   rangeToDates,
+  rowLeads,
   type Company,
   type InsightDaily,
 } from "@/lib/domain";
@@ -34,7 +35,7 @@ function toTrend(rows: InsightDaily[]): TrendPoint[] {
     };
     p.spend += r.spend;
     p.clicks += r.clicks;
-    p.leads += r.leads;
+    p.leads += rowLeads(r);
     byDate.set(r.date, p);
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -197,8 +198,10 @@ async function ReportBody({
         <MetricCard
           label="Leads"
           value={num(totals.leads)}
+          sub={`${num(totals.formLeads)} forms · ${num(totals.calls)} calls · ${num(totals.messages)} msgs`}
           delta={pctChange(totals.leads, prevTotals.leads)}
           periodLabel={periodLabel}
+          tip="Lead-form submissions, calls placed and messaging conversations started, combined."
         />
         <MetricCard
           label="Cost per lead"
@@ -206,7 +209,7 @@ async function ReportBody({
           delta={totals.leads && prevTotals.leads ? pctChange(totals.cpl, prevTotals.cpl) : undefined}
           periodLabel={periodLabel}
           deltaGoodDirection="down"
-          tip="Ad spend divided by number of leads generated — lower is better."
+          tip="Ad spend divided by leads (forms + calls + messages) ~ lower is better."
         />
         <MetricCard
           label="CPR"
@@ -214,7 +217,7 @@ async function ReportBody({
           delta={totals.results && prevTotals.results ? pctChange(totals.cpr, prevTotals.cpr) : undefined}
           periodLabel={periodLabel}
           deltaGoodDirection="down"
-          tip="Ad spend divided by total results (leads + calls) — lower is better."
+          tip="Ad spend divided by all results (leads, calls, messages, follows and engagement) ~ lower is better."
         />
         <MetricCard
           label="CPC"
@@ -222,7 +225,7 @@ async function ReportBody({
           delta={totals.clicks && prevTotals.clicks ? pctChange(totals.cpc, prevTotals.cpc) : undefined}
           periodLabel={periodLabel}
           deltaGoodDirection="down"
-          tip="Ad spend divided by number of clicks — lower is better."
+          tip="Ad spend divided by number of clicks ~ lower is better."
         />
       </section>
 
