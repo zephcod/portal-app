@@ -8,6 +8,12 @@ export const env = {
   // ── Public app origin (for building absolute links, e.g. in comment titles) ──
   appUrl: () => (process.env.APP_URL ?? "").replace(/\/+$/, ""),
 
+  // ── Scheduler app (owns the Meta → organic_stats_daily sync) ──
+  // Used by the Insights "Sync now" button, which calls the scheduler's
+  // /api/cron/organic-stats?company=<id>. Optional: unset hides the button.
+  schedulerUrl: () => (process.env.SCHEDULER_URL ?? "").replace(/\/+$/, ""),
+  schedulerCronSecret: () => process.env.SCHEDULER_CRON_SECRET ?? "",
+
   // ── Meta Graph API (social pages) ──
   // Which pages are in scope is derived live from each company's
   // fbPageId in Appwrite (see lib/pages.ts) — no id list here.

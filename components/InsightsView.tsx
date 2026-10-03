@@ -1,5 +1,6 @@
 import { Heart, MessageCircle, Repeat2 } from "lucide-react";
 import { Suspense } from "react";
+import BarChart from "@/components/BarChart";
 import { InfoTip } from "@/components/InfoTip";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { ShowTopContentButton } from "@/components/ShowTopContentButton";
@@ -26,37 +27,6 @@ type NumericStatKey =
   | "igReach"
   | "igFollowerAdds"
   | "postsPublishedCount";
-
-// ── Tiny server-rendered bar chart ──
-function BarChart({ series }: { series: MetricSeries }) {
-  const max = Math.max(...series.points.map((p) => p.value), 1);
-  return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <span className="font-mono text-[11px] tracking-[0.12em] text-muted uppercase">
-          {series.title}
-        </span>
-        <span className="font-display text-lg font-bold">
-          {series.total.toLocaleString()}
-        </span>
-      </div>
-      <div className="mt-2 flex h-24 items-end gap-px">
-        {series.points.map((p) => (
-          <div
-            key={p.date}
-            title={`${p.date}: ${p.value.toLocaleString()}`}
-            className="min-w-0 flex-1 rounded-t-sm bg-gold/70 hover:bg-amber"
-            style={{ height: `${Math.max((p.value / max) * 100, 2)}%` }}
-          />
-        ))}
-      </div>
-      <div className="mt-1 flex justify-between font-mono text-[9px] text-muted">
-        <span>{series.points[0]?.date.slice(5)}</span>
-        <span>{series.points.at(-1)?.date.slice(5)}</span>
-      </div>
-    </div>
-  );
-}
 
 /**
  * `delta` is % change vs the immediately preceding period of equal length

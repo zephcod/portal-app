@@ -1,8 +1,11 @@
 import { Suspense } from "react";
 import { RangeSelect } from "@/components/RangeSelect";
 import InsightsView from "@/components/InsightsView";
+import SyncInsightsButton from "@/components/SyncInsightsButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getClientPage } from "@/lib/clientpage";
+import { getLastOrganicSyncAt } from "@/lib/data";
+import { env } from "@/lib/env";
 import { RANGE_PRESETS } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +24,26 @@ export default async function ClientInsightsPage({
     <div>
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-display text-2xl font-bold">Organic Insights</h1>
-        <RangeSelect />
+        <div className="flex flex-wrap items-start gap-3">
+          <Suspense fallback={null}>
+            <SyncSlot />
+          </Suspense>
+          <RangeSelect />
+        </div>
       </header>
       <Suspense fallback={<InsightsBodySkeleton />}>
         <InsightsBody days={days} showTop={showTop} />
       </Suspense>
     </div>
   );
+}
+
+/** Manual Meta sync — only for linked pages, and only once the scheduler endpoint is configured. */
+async function SyncSlot() {
+  const ctx = await getClientPage();
+  if (!ctx || !env.schedulerUrl() || !env.schedulerCronSecret()) return null;
+  const lastSyncedAt = await getLastOrganicSyncAt(ctx.session.cid).catch(() => null);
+  return <SyncInsightsButton lastSyncedAt={lastSyncedAt} />;
 }
 
 async function InsightsBody({ days, showTop }: { days: number; showTop: boolean }) {

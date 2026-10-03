@@ -204,6 +204,16 @@ export async function getOrganicStats(
   ]);
 }
 
+/** Most recent `syncedAt` the scheduler wrote for a company, or null if never synced. */
+export async function getLastOrganicSyncAt(companyId: string): Promise<string | null> {
+  const res = await db().listDocuments(DB(), COLLECTIONS.organicStats, [
+    Query.equal("companyId", companyId),
+    Query.orderDesc("$updatedAt"),
+    Query.limit(1),
+  ]);
+  return (res.documents[0]?.syncedAt as string | undefined) ?? null;
+}
+
 export async function getInsight(id: string): Promise<InsightDaily | null> {
   try {
     return (await db().getDocument(

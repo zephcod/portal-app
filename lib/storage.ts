@@ -11,6 +11,14 @@ import { env } from "./env";
 /** Shared bucket ("profile") the scheduler stages FB/IG queue media in. */
 export const MEDIA_BUCKET = "658477e7eef2f71d1693";
 
+/**
+ * Same file as a forced download (Content-Disposition: attachment) —
+ * for planned posts the client saves and posts by hand (lib/planned.ts).
+ */
+export function mediaDownloadUrl(fileId: string): string {
+  return `${env.appwriteEndpoint()}/storage/buckets/${MEDIA_BUCKET}/files/${fileId}/download?project=${env.appwriteProjectId()}`;
+}
+
 /** Public URL for a file in the shared media bucket (public read). */
 export function mediaUrl(fileId: string): string {
   return `${env.appwriteEndpoint()}/storage/buckets/${MEDIA_BUCKET}/files/${fileId}/view?project=${env.appwriteProjectId()}`;

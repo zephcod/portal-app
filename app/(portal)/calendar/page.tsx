@@ -3,7 +3,7 @@ import CalendarView from "@/components/CalendarView";
 import PostsList from "@/components/PostsList";
 import { ShowTopContentButton } from "@/components/ShowTopContentButton";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getClientPage } from "@/lib/clientpage";
+import { getClientTarget } from "@/lib/clientpage";
 
 export const dynamic = "force-dynamic";
 
@@ -32,19 +32,30 @@ async function CalendarBody({
   monthParam?: string;
   showTop: boolean;
 }) {
-  const ctx = await getClientPage();
-  const error = ctx
-    ? null
-    : "Your account isn't linked to a page yet — contact your Awaj ET account manager.";
+  const ctx = await getClientTarget();
+  const error = ctx ? null : "Your session has expired — please log in again.";
+  const page = ctx?.page ?? null;
+  const pageKeys = ctx?.pageKeys ?? [];
 
   return (
     <>
       <p className="mt-1 text-sm text-muted">
-        {ctx?.page.name ?? "Your page"} · scheduled and published posts, ET
+        {page?.name ?? "Your page"} · scheduled and published posts, ET
         time.
       </p>
 
-      {!error && !showTop && (
+      {ctx && !page && (
+        <div className="mt-4 rounded-lg border border-dashed border-amber/50 bg-card/60 p-4">
+          <p className="text-sm font-semibold">Your Facebook page isn&apos;t linked yet</p>
+          <p className="mt-1 text-sm text-muted">
+            These posts are ready for you to post yourself — open one to
+            download its image and copy the caption. Once your page is
+            linked, upcoming posts will publish automatically.
+          </p>
+        </div>
+      )}
+
+      {!error && page && !showTop && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-edge bg-card/60 p-4">
           <p className="text-sm text-muted">
             The calendar and recently published list below show scheduled
@@ -57,7 +68,8 @@ async function CalendarBody({
 
       <div className="mt-4">
         <CalendarView
-          page={ctx?.page ?? null}
+          page={page}
+          pageKeys={pageKeys}
           error={error}
           monthParam={monthParam}
           basePath="/calendar"
@@ -69,7 +81,7 @@ async function CalendarBody({
       <hr className="mt-10 border-edge" />
 
       <div className="mt-8">
-        <PostsList page={ctx?.page ?? null} error={error} showTop={showTop} />
+        <PostsList page={page} pageKeys={pageKeys} error={error} showTop={showTop} />
       </div>
     </>
   );

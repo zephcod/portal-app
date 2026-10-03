@@ -96,3 +96,17 @@ export async function notifyNewPostComment(opts: {
       `<i>Reply from the reports admin → Issues.</i>`
   );
 }
+
+/** Client changed a queued post (approve/unapprove, reschedule, caption edit). */
+export async function notifyPostChange(opts: {
+  companyName: string;
+  change: string;
+  url: string;
+}): Promise<void> {
+  await sendTelegram(
+    `✏️ <b>Client updated a scheduled post</b>\n` +
+      `<b>${esc(opts.companyName)}</b>\n\n` +
+      `${esc(opts.change)}\n\n` +
+      `<i>${esc(opts.url)}</i>`
+  );
+}

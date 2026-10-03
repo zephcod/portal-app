@@ -1,4 +1,12 @@
-import { ArrowUpRight, Clapperboard, Heart, LayoutGrid, MessageCircle, Repeat2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  Clapperboard,
+  Download,
+  Heart,
+  LayoutGrid,
+  MessageCircle,
+  Repeat2,
+} from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { LoadMoreList } from "@/components/LoadMoreList";
@@ -11,10 +19,21 @@ import { fmtDateTime, relativeFromNow } from "@/lib/format";
 import { listIgQueue, type IgQueueItem } from "@/lib/igqueue";
 import { getIgAccount, listIgMedia, type IgMedia } from "@/lib/instagram";
 import type { ManagedPage } from "@/lib/pages";
+import { isPlannedStatus } from "@/lib/planned";
 import { mediaUrl } from "@/lib/storage";
+
+/** Statuses shown under Upcoming: live pending/approved/publishing + planned (unlinked). */
+const CLIENT_UPCOMING = new Set(["pending", "approved", "publishing", "planned", "planned_ok"]);
 
 type Stat = { Icon: typeof Heart; value: number };
 type Badge = { Icon: typeof LayoutGrid; label: string };
+
+/** Planned (unlinked-page) posts are the client's to post — flag the due ones. */
+function plannedBadge(scheduledAt: number): Badge {
+  return scheduledAt * 1000 <= Date.now()
+    ? { Icon: Download, label: "ready to post" }
+    : { Icon: Download, label: "post manually" };
+}
 type UpcomingItem = {
   key: string;
   href: string;
@@ -39,8 +58,11 @@ export default async function PostsList({
   page,
   error: externalError,
   showTop,
+  pageKeys,
 }: {
   page: ManagedPage | null;
+  /** Queue keys for this client (lib/clientpage.ts) — works before a page is linked. */
+  pageKeys: string[];
   error?: string | null;
   /** Reveals Recently published (live Graph calls) — suppressed until the user asks for it. */
   showTop: boolean;
@@ -49,22 +71,18 @@ export default async function PostsList({
   let igQueued: IgQueueItem[] = [];
   let error: string | null = externalError ?? null;
 
-  if (!error && page) {
+  if (!error && pageKeys.length) {
     if (fbQueueConfigured()) {
       try {
-        // Clients see pending/approved/publishing items — no failure internals.
-        fbQueued = (await listFbQueue(page.id)).filter(
-          (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
-        );
+        // Clients see upcoming live + planned items — no failure internals.
+        fbQueued = (await listFbQueue(pageKeys)).filter((i) => CLIENT_UPCOMING.has(i.status));
       } catch {
         // queue unreachable — IG upcoming still shown
       }
     }
     if (igQueueConfigured()) {
       try {
-        igQueued = (await listIgQueue(page.id)).filter(
-          (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
-        );
+        igQueued = (await listIgQueue(pageKeys)).filter((i) => CLIENT_UPCOMING.has(i.status));
       } catch {
         // queue unreachable — FB upcoming still shown
       }
@@ -99,8 +117,9 @@ export default async function PostsList({
       platformLabel: "Facebook",
       text: item.caption || "(no caption)",
       image: fbThumbs[item.$id],
-      badge:
-        item.mediaType === "multiImage"
+      badge: isPlannedStatus(item.status)
+        ? plannedBadge(item.scheduledAt)
+        : item.mediaType === "multiImage"
           ? { Icon: LayoutGrid, label: "multi-photo" }
           : item.mediaType === "video"
             ? { Icon: Clapperboard, label: "video" }
@@ -115,8 +134,9 @@ export default async function PostsList({
       platformLabel: "Instagram",
       text: i.caption || "(image post)",
       image: igThumbs[i.$id],
-      badge:
-        i.mediaType === "carousel"
+      badge: isPlannedStatus(i.status)
+        ? plannedBadge(i.scheduledAt)
+        : i.mediaType === "carousel"
           ? { Icon: LayoutGrid, label: "carousel" }
           : i.mediaType === "reel"
             ? { Icon: Clapperboard, label: "reel" }

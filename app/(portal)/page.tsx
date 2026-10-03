@@ -11,7 +11,7 @@ import { ShowTopContentButton } from "@/components/ShowTopContentButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatTile } from "@/components/StatTile";
 import { TopUpModal } from "@/components/TopUpModal";
-import { getClientPage } from "@/lib/clientpage";
+import { getClientTarget } from "@/lib/clientpage";
 import {
   getCampaigns,
   getCompany,
@@ -72,6 +72,9 @@ function sumOrganicRows(rows: OrganicStatsDaily[]) {
     { reach: 0, pageViews: 0, engagement: 0, followersNet: 0 }
   );
 }
+
+/** Upcoming = live pending/approved/publishing + planned (unlinked page) posts. */
+const CLIENT_UPCOMING = new Set(["pending", "approved", "publishing", "planned", "planned_ok"]);
 
 export default async function OverviewPage({
   searchParams,
@@ -137,7 +140,7 @@ async function OverviewBody({
     getInsights(session.cid, prev.since, prev.until),
     getCampaigns(session.cid),
     getIssues(session.cid),
-    getClientPage(),
+    getClientTarget(),
   ]);
 
   const adTotals = computeTotals(adRows.map((r) => ({ ...r, spend: r.spend * multiplier })));
@@ -176,13 +179,63 @@ async function OverviewBody({
   let postsLastWeekCount = 0;
   let page: ManagedPage | null = null;
 
-  if (!ctx) {
-    organicError =
-      "Your account isn't linked to a page yet — contact your Awaj ET account manager.";
+  // ── Upcoming content (top 3) ── Appwrite-only (fb_queue + ig_queue),
+  // so it works before a page is linked too: an unlinked company's
+  // planned posts live under its `co:` key (lib/clientpage.ts).
+  if (ctx) {
+    const isUpcoming = (status: string) => CLIENT_UPCOMING.has(status);
+    let igQueueItems: Awaited<ReturnType<typeof listIgQueue>> = [];
+    if (igQueueConfigured()) {
+      try {
+        igQueueItems = (await listIgQueue(ctx.pageKeys)).filter((i) => isUpcoming(i.status));
+      } catch {
+        // queue unreachable — FB upcoming content still shown
+      }
+    }
+    let fbQueueItems: Awaited<ReturnType<typeof listFbQueue>> = [];
+    if (fbQueueConfigured()) {
+      try {
+        fbQueueItems = (await listFbQueue(ctx.pageKeys)).filter((i) => isUpcoming(i.status));
+      } catch {
+        // queue unreachable — IG upcoming content still shown
+      }
+    }
+    upcoming = [
+      ...fbQueueItems.map((item) => ({
+        key: `fbq-${item.$id}`,
+        postId: item.$id,
+        href: `/posts/${item.$id}?source=fb-queue`,
+        when: item.scheduledAt,
+        platform: "fb" as const,
+        label: item.caption || "(no caption)",
+      })),
+      ...igQueueItems.map((i) => ({
+        key: `ig-${i.$id}`,
+        postId: i.$id,
+        href: `/posts/${i.$id}?source=ig-queue`,
+        when: i.scheduledAt,
+        platform: "ig" as const,
+        label: i.caption || "(image post)",
+      })),
+    ].sort((a, b) => a.when - b.when);
+
+    // Client hasn't signed off (no "approved" comment) on an upcoming post yet.
+    const reviewChecks = await Promise.all(
+      upcoming.map(async (u) => {
+        const comments = await getPostComments(session.cid, u.postId);
+        return comments.some((c) => c.status === "approved");
+      })
+    );
+    awaitingReview = reviewChecks.filter((approved) => !approved).length;
+  }
+
+  if (!ctx?.page) {
+    organicError = ctx
+      ? "Your Facebook page isn't linked yet, stats will appear once it is. Your planned posts are ready to download in the Content calendar."
+      : "Your account isn't linked to a page yet — contact your Awaj ET account manager.";
   } else {
-    // Everything in this block is Appwrite-only (organic-stats cache,
-    // scheduling queues, comment lookups) — no live Meta Graph calls, so
-    // it resolves fast and renders as part of this same Suspense-gated
+    // Everything in this block is Appwrite-only (organic-stats cache)
+    // — no live Meta Graph calls, so it resolves fast and renders as part of this same Suspense-gated
     // body. "Top performing content" below is the one section that still
     // needs a live Graph call (listPublishedPosts) and streams in via its
     // own nested Suspense instead of blocking everything above it.
@@ -197,27 +250,6 @@ async function OverviewBody({
           ? getOrganicStats(session.cid, prev.since, cappedPrevUntil)
           : Promise.resolve([]),
       ]);
-
-      let igQueueItems: Awaited<ReturnType<typeof listIgQueue>> = [];
-      if (igQueueConfigured()) {
-        try {
-          igQueueItems = (await listIgQueue(page.id)).filter(
-            (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
-          );
-        } catch {
-          // queue unreachable — FB upcoming content still shown
-        }
-      }
-      let fbQueueItems: Awaited<ReturnType<typeof listFbQueue>> = [];
-      if (fbQueueConfigured()) {
-        try {
-          fbQueueItems = (await listFbQueue(page.id)).filter(
-            (i) => i.status === "pending" || i.status === "approved" || i.status === "publishing"
-          );
-        } catch {
-          // queue unreachable — FB upcoming content still shown
-        }
-      }
 
       statsNotSynced = curRows.length === 0;
 
@@ -234,37 +266,6 @@ async function OverviewBody({
       engagementDelta = pctChange(curTotals.engagement, prevTotals.engagement);
       followersNet = curTotals.followersNet;
       followersDelta = pctChange(curTotals.followersNet, prevTotals.followersNet);
-
-      // ── Upcoming content (top 3) ── Appwrite-only: FB scheduling now
-      // runs through fb_queue, not Facebook's native scheduler (being
-      // phased out entirely, so it's no longer read here at all).
-      upcoming = [
-        ...fbQueueItems.map((item) => ({
-          key: `fbq-${item.$id}`,
-          postId: item.$id,
-          href: `/posts/${item.$id}?source=fb-queue`,
-          when: item.scheduledAt,
-          platform: "fb" as const,
-          label: item.caption || "(no caption)",
-        })),
-        ...igQueueItems.map((i) => ({
-          key: `ig-${i.$id}`,
-          postId: i.$id,
-          href: `/posts/${i.$id}?source=ig-queue`,
-          when: i.scheduledAt,
-          platform: "ig" as const,
-          label: i.caption || "(image post)",
-        })),
-      ].sort((a, b) => a.when - b.when);
-
-      // Client hasn't signed off (no "approved" comment) on an upcoming post yet.
-      const reviewChecks = await Promise.all(
-        upcoming.map(async (u) => {
-          const comments = await getPostComments(session.cid, u.postId);
-          return comments.some((c) => c.status === "approved");
-        })
-      );
-      awaitingReview = reviewChecks.filter((approved) => !approved).length;
 
       // Cadence: real trailing-7-days-through-yesterday, independent of
       // the selected range — always a subset of curRows since every

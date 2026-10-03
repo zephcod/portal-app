@@ -65,8 +65,11 @@ export default async function CalendarView({
   basePath,
   readOnly = false,
   showTop,
+  pageKeys,
 }: {
   page: ManagedPage | null;
+  /** Queue keys for this client (lib/clientpage.ts) — works before a page is linked. */
+  pageKeys: string[];
   error?: string | null;
   monthParam?: string;
   basePath: string;
@@ -100,10 +103,10 @@ export default async function CalendarView({
 
   // ── Fast tier: Appwrite-only scheduled events (fb_queue + ig_queue) ──
   const scheduledEvents = new Map<string, CalEvent[]>();
-  if (!error && page) {
+  if (!error && pageKeys.length) {
     if (fbQueueConfigured()) {
       try {
-        for (const item of await listFbQueue(page.id)) {
+        for (const item of await listFbQueue(pageKeys)) {
           if (readOnly && item.status === "failed") continue;
           const d = new Date(item.scheduledAt * 1000);
           addEvent(scheduledEvents, monthKey, eatYmd(d), {
@@ -114,7 +117,9 @@ export default async function CalendarView({
                 ? "failed"
                 : item.status === "publishing"
                   ? "publishing"
-                  : "scheduled",
+                  : item.status === "posted_manually"
+                    ? "published"
+                    : "scheduled",
             label: item.caption || "(no caption)",
             href: readOnly ? `/posts/${item.$id}?source=fb-queue` : "/scheduled",
           });
@@ -125,7 +130,7 @@ export default async function CalendarView({
     }
     if (igQueueConfigured()) {
       try {
-        for (const item of await listIgQueue(page.id)) {
+        for (const item of await listIgQueue(pageKeys)) {
           if (readOnly && item.status === "failed") continue;
           const d = new Date(item.scheduledAt * 1000);
           addEvent(scheduledEvents, monthKey, eatYmd(d), {
@@ -136,7 +141,9 @@ export default async function CalendarView({
                 ? "failed"
                 : item.status === "publishing"
                   ? "publishing"
-                  : "scheduled",
+                  : item.status === "posted_manually"
+                    ? "published"
+                    : "scheduled",
             label: item.caption || "(image)",
             href: readOnly ? `/posts/${item.$id}?source=ig-queue` : "/scheduled",
           });

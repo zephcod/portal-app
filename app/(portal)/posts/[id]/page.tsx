@@ -1,18 +1,23 @@
 import { ArrowUpRight, ChevronLeft, Heart, MessageCircle, Repeat2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import EditCaptionForm from "@/components/EditCaptionForm";
 import { IssueStatusChip } from "@/components/IssueStatusChip";
 import { PlatformIcon } from "@/components/PlatformIcon";
+import PostDownloads from "@/components/PostDownloads";
+import PostStatusSelect from "@/components/PostStatusSelect";
+import RescheduleForm from "@/components/RescheduleForm";
 import SubmitButton from "@/components/SubmitButton";
-import { getClientPage } from "@/lib/clientpage";
+import { getClientTarget } from "@/lib/clientpage";
 import { getPostComments } from "@/lib/data";
 import { getFbQueueItem } from "@/lib/fbqueue";
 import { getPublishedPost, getScheduledPost } from "@/lib/facebook";
 import { fmtDateTime, relativeFromNow } from "@/lib/format";
 import { getIgQueueItem } from "@/lib/igqueue";
 import { getIgMedia } from "@/lib/instagram";
-import { mediaUrl } from "@/lib/storage";
-import { submitPostComment } from "./actions";
+import { isPlannedStatus } from "@/lib/planned";
+import { mediaDownloadUrl, mediaUrl } from "@/lib/storage";
+import { markPostedManually, submitPostComment } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +31,35 @@ type Source =
   | "ig-queue"
   | "ig-published";
 
+/** Queue statuses a client can open — live upcoming + planned (unlinked page). */
+const CLIENT_VISIBLE = new Set([
+  "pending",
+  "approved",
+  "publishing",
+  "planned",
+  "planned_ok",
+  "posted_manually",
+]);
+
+function queueStatusLabel(status: string, scheduledAt: number): string {
+  if (status === "approved" || status === "planned_ok") {
+    return isPlannedStatus(status) && scheduledAt * 1000 <= Date.now()
+      ? "Approved · ready to post"
+      : "Approved";
+  }
+  if (status === "publishing") return "Publishing";
+  if (status === "posted_manually") return "Posted by you";
+  if (status === "planned") {
+    return scheduledAt * 1000 <= Date.now() ? "Ready to post" : "Planned";
+  }
+  return "Scheduled";
+}
+
+/** Client-facing toggle value: planned/planned_ok map onto the same pending/approved pair. */
+function approvalOf(status: string): "pending" | "approved" {
+  return status === "approved" || status === "planned_ok" ? "approved" : "pending";
+}
+
 function isSource(v: string | undefined): v is Source {
   return (
     v === "fb-scheduled" ||
@@ -34,6 +68,28 @@ function isSource(v: string | undefined): v is Source {
     v === "ig-queue" ||
     v === "ig-published"
   );
+}
+
+const EDITABLE = new Set(["pending", "approved", "planned", "planned_ok"]);
+
+/** Download links + "I posted this" eligibility for a planned queue item. */
+function manualFor(item: {
+  status: string;
+  scheduledAt: number;
+  mediaRefs?: string;
+  mediaType?: string;
+}): { downloads: { url: string; label: string }[]; canMarkPosted: boolean } {
+  const refs: string[] = item.mediaRefs ? JSON.parse(item.mediaRefs) : [];
+  const isVideo = item.mediaType === "video" || item.mediaType === "reel";
+  return {
+    downloads: refs.map((ref, i) => ({
+      url: mediaDownloadUrl(ref),
+      label: isVideo ? "Download video" : refs.length > 1 ? `Download image ${i + 1}` : "Download image",
+    })),
+    canMarkPosted:
+      (item.status === "planned" || item.status === "planned_ok") &&
+      item.scheduledAt * 1000 <= Date.now(),
+  };
 }
 
 export default async function PostDetailPage({
@@ -47,8 +103,13 @@ export default async function PostDetailPage({
   const { source } = await searchParams;
   if (!isSource(source)) notFound();
 
-  const ctx = await getClientPage();
+  const ctx = await getClientTarget();
   if (!ctx) notFound();
+  // Graph-backed sources need a linked page; queue sources work without one.
+  const page = ctx.page;
+  if (!page && (source === "fb-scheduled" || source === "fb-published" || source === "ig-published")) {
+    notFound();
+  }
 
   let platform: "fb" | "ig";
   let platformName: string;
@@ -60,12 +121,20 @@ export default async function PostDetailPage({
   let permalink: string | undefined;
   let permalinkLabel = "View on Facebook";
   let badge: string | undefined;
+  /** Set for queue items the client may still change (pending/approved/planned/planned_ok). */
+  let editable:
+    | { id: string; status: "pending" | "approved"; caption: string }
+    | undefined;
+  /** Planned post (page not linked): the client downloads and posts it themselves. */
+  let manual:
+    | { downloads: { url: string; label: string }[]; canMarkPosted: boolean }
+    | undefined;
   let engagement:
     | { reactions: number; comments: number; shares?: number }
     | undefined;
 
   if (source === "fb-scheduled") {
-    const post = await getScheduledPost(ctx.page, id);
+    const post = await getScheduledPost(page!, id);
     if (!post) notFound();
     platform = "fb";
     platformName = "Facebook";
@@ -75,7 +144,7 @@ export default async function PostDetailPage({
     placeholder = "(photo post)";
     image = post.full_picture;
   } else if (source === "fb-published") {
-    const post = await getPublishedPost(ctx.page, id);
+    const post = await getPublishedPost(page!, id);
     if (!post) notFound();
     platform = "fb";
     platformName = "Facebook";
@@ -91,13 +160,15 @@ export default async function PostDetailPage({
       shares: post.shares?.count ?? 0,
     };
   } else if (source === "fb-queue") {
-    const item = await getFbQueueItem(ctx.page.id, id);
-    if (!item || (item.status !== "pending" && item.status !== "publishing")) {
-      notFound();
-    }
+    const item = await getFbQueueItem(ctx.pageKeys, id);
+    if (!item || !CLIENT_VISIBLE.has(item.status)) notFound();
     platform = "fb";
     platformName = "Facebook";
-    statusLabel = item.status === "publishing" ? "Publishing" : "Scheduled";
+    statusLabel = queueStatusLabel(item.status, item.scheduledAt);
+    if (EDITABLE.has(item.status)) {
+      editable = { id: item.$id, status: approvalOf(item.status), caption: item.caption ?? "" };
+    }
+    if (isPlannedStatus(item.status)) manual = manualFor(item);
     when = item.scheduledAt;
     text = item.caption ?? "";
     placeholder = "(no caption)";
@@ -112,13 +183,15 @@ export default async function PostDetailPage({
           ? "video"
           : undefined;
   } else if (source === "ig-queue") {
-    const item = await getIgQueueItem(ctx.page.id, id);
-    if (!item || (item.status !== "pending" && item.status !== "publishing")) {
-      notFound();
-    }
+    const item = await getIgQueueItem(ctx.pageKeys, id);
+    if (!item || !CLIENT_VISIBLE.has(item.status)) notFound();
     platform = "ig";
     platformName = "Instagram";
-    statusLabel = item.status === "publishing" ? "Publishing" : "Scheduled";
+    statusLabel = queueStatusLabel(item.status, item.scheduledAt);
+    if (EDITABLE.has(item.status)) {
+      editable = { id: item.$id, status: approvalOf(item.status), caption: item.caption ?? "" };
+    }
+    if (isPlannedStatus(item.status)) manual = manualFor(item);
     when = item.scheduledAt;
     text = item.caption ?? "";
     placeholder = "(image post)";
@@ -137,7 +210,7 @@ export default async function PostDetailPage({
           ? "reel"
           : undefined;
   } else {
-    const media = await getIgMedia(ctx.page, id);
+    const media = await getIgMedia(page!, id);
     if (!media) notFound();
     platform = "ig";
     platformName = "Instagram";
@@ -202,18 +275,56 @@ export default async function PostDetailPage({
           {fmtDateTime(when)} EAT · {relativeFromNow(when)}
         </p>
 
-        {image && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image}
-            alt=""
-            className="mt-4 max-h-96 w-full rounded-lg border border-edge bg-app object-contain"
-          />
+        {/* Same 4:5 media frame + caption stack as the scheduler's /scheduled cards. */}
+        <div className="mt-4 flex flex-col gap-3">
+          {image && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={image}
+              alt=""
+              className="aspect-[4/5] w-full rounded-md border border-edge object-cover"
+            />
+          )}
+          <p className="text-sm whitespace-pre-wrap">
+            {text || <span className="text-muted italic">{placeholder}</span>}
+          </p>
+        </div>
+
+        {editable && (
+          <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-edge pt-3">
+            <PostStatusSelect
+              key={editable.status}
+              itemId={editable.id}
+              platform={platform}
+              currentStatus={editable.status}
+            />
+            <RescheduleForm itemId={editable.id} platform={platform} currentUnix={when} />
+            <EditCaptionForm
+              itemId={editable.id}
+              platform={platform}
+              currentCaption={editable.caption}
+            />
+          </div>
         )}
 
-        <p className="mt-4 text-sm whitespace-pre-wrap">
-          {text || <span className="text-muted italic">{placeholder}</span>}
-        </p>
+        {manual && (
+          <div className="mt-4 rounded-lg border border-dashed border-amber/50 bg-app p-4">
+            <p className="text-sm font-semibold">Post this yourself</p>
+            <p className="mt-1 text-xs text-muted">
+              Your {platformName} page isn&apos;t linked to Awaj ET yet, so this
+              post won&apos;t publish automatically. Download the media, copy
+              the caption, and post it on its date.
+            </p>
+            <PostDownloads downloads={manual.downloads} caption={text} />
+            {manual.canMarkPosted && (
+              <form action={markPostedManually} className="mt-3">
+                <input type="hidden" name="id" value={id} />
+                <input type="hidden" name="platform" value={platform} />
+                <SubmitButton>I posted this</SubmitButton>
+              </form>
+            )}
+          </div>
+        )}
 
         {engagement && (
           <div className="mt-6 flex gap-6 border-t border-edge pt-4 font-mono text-xs text-muted">
@@ -233,7 +344,7 @@ export default async function PostDetailPage({
       </div>
 
       <section className="mt-8 rounded-xl border border-edge bg-card p-4 shadow-sm sm:p-6">
-        <h2 className="font-display mb-4 text-lg font-semibold">Leave a comment</h2>
+        <h2 className="font-display mb-4 text-lg font-semibold">Send remarks to Awaj team</h2>
         <form action={submitPostComment} className="space-y-3">
           <input type="hidden" name="postId" value={id} />
           <input type="hidden" name="postSource" value={source} />
@@ -244,7 +355,7 @@ export default async function PostDetailPage({
               required
               rows={4}
               maxLength={4096}
-              placeholder="Feedback, change requests, or your approval — let us know what you think."
+              placeholder="Feedback, change requests, or your approval... Let us know what you think."
               className={inputCls}
             />
           </label>
